@@ -72,3 +72,36 @@ uv run <command>
 - Handle exceptions gracefully and provide meaningful error messages.
 - Keep functions and methods small and focused on a single responsibility.
 - All routes use 'api/v1' prefix, e.g., `api/v1/properties`, `api/v1/units`, etc.
+
+## ⚠️ Git workflow — CRITICAL RULES
+
+### Workflow: GitHub Flow
+One protected branch: main
+All features merge directly to main via PR
+
+### BEFORE starting ANY task:
+1. Check current branch:  git branch --show-current
+2. If on main — STOP and create a feature branch first:
+   git checkout main && git pull origin main
+   git checkout -b feature/describe-the-task
+3. Only start work after confirming you are NOT on main
+
+### Branch naming
+feature/short-description   →  new features
+fix/what-you-are-fixing     →  bug fixes  
+chore/what-you-are-doing    →  config, tooling
+test/what-you-are-testing   →  tests only
+docs/what-you-are-writing   →  documentation
+
+### Every task follows this exact flow
+git checkout main && git pull origin main
+git checkout -b feature/task-name
+# do the work
+git add . && git commit -m "type: description"
+git push origin feature/task-name
+# open PR on GitHub → review → merge → delete branch
+
+### NEVER
+- Never commit directly to main
+- Never force push to main
+- Never skip the PR — even for a one-line change
