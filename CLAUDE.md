@@ -85,6 +85,7 @@ All features merge directly to main via PR
    git checkout main && git pull origin main
    git checkout -b feature/describe-the-task
 3. Only start work after confirming you are NOT on main
+4. Always make sure that the virtual environment is activated before running any commands, especially before installing new dependencies or running the application. 
 
 ### Branch naming
 feature/short-description   →  new features
@@ -105,3 +106,41 @@ git push origin feature/task-name
 - Never commit directly to main
 - Never force push to main
 - Never skip the PR — even for a one-line change
+
+## SKELETON STRUCTURE
+.
+├── .env
+├── .env.example
+├── .github/
+│   ├── CODEOWNERS
+│   ├── PULL_REQUEST_TEMPLATE.md
+│   └── workflows/
+│       └── ci.yml
+├── .gitignore
+├── CLAUDE.md
+├── CONTRIBUTING.md
+├── alembic.ini
+├── app/
+│   ├── __init__.py
+│   ├── core/
+│   │   ├── __init__.py
+│   │   ├── config.py
+│   │   ├── dependencies.py
+│   │   └── security.py
+│   ├── database.py
+│   ├── main.py
+│   ├── models/
+│   │   └── __init__.py
+│   ├── routers/
+│   │   └── __init__.py
+│   ├── schemas/
+│   │   └── __init__.py
+│   └── services/
+│       └── __init__.py
+├── migrations/
+│   └── versions/
+├── pyproject.toml
+├── README.md
+└── tests/
+    ├── __init__.py
+    └── conftest.py
