@@ -107,6 +107,17 @@ git push origin feature/task-name
 - Never force push to main
 - Never skip the PR — even for a one-line change
 
+## LOCAL DEVELOPMENT SETUP
+
+### Before starting work each session
+1. Start the database container: `docker compose up -d`
+2. Activate the virtual environment: `uv sync`
+3. Check the container is healthy: `docker compose ps`
+
+## DATABASE CONNECTION
+
+The database connection string is stored in `.env`. Do not hard-code credentials anywhere — always look up the connection string in `.env`.
+
 ## SKELETON STRUCTURE
 .
 ├── .env
