@@ -76,6 +76,24 @@ uv run <command>
 - Keep functions and methods small and focused on a single responsibility.
 - All routes use 'api/v1' prefix, e.g., `api/v1/properties`, `api/v1/units`, etc.
 
+## Custom Slash Commands
+
+Project-specific Claude Code slash commands live in `.claude/commands/`. Each `.md` file in that directory becomes a `/filename` command available in Claude Code sessions.
+
+### `/new-endpoint <resource>`
+Scaffolds a new resource across all architecture layers. For example, `/new-endpoint property` creates:
+
+| File | Purpose |
+|---|---|
+| `app/schemas/property.py` | Pydantic V2 Create/Update/Response schema stubs |
+| `app/models/property.py` | SQLAlchemy ORM model stub (skipped if exists) |
+| `app/repositories/property_repository.py` | Async query function stubs |
+| `app/services/property_service.py` | Business logic stubs |
+| `app/routers/property.py` | FastAPI router stub (prefix: `/api/v1/property`) |
+| `tests/test_property.py` | Placeholder test file |
+
+The command only creates stubs with descriptive docstrings — no real implementation — unless explicitly asked. All files are staged for review but not committed.
+
 ## ⚠️ Git workflow — CRITICAL RULES
 
 ### Workflow: GitHub Flow
