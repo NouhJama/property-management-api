@@ -38,14 +38,17 @@ uv run <command>
 - Formatting: **black** for consistent code formatting.
 
 ## Code/Project Organization
-- `main.py`: Entry point for the application.
-- `models/`: SQLAlchemy models for database tables.
+- `app/main.py`: Entry point for the application.
+- `models/`: SQLAlchemy ORM models for database tables.
 - `schemas/`: Pydantic models for request and response validation.
 - `routers/`: FastAPI routers for different API endpoints.
-- `services/`: Business logic and interactions with the database.
-- `core/`: Core utilities, such as database session management and common functions.
+- `services/`: Business logic and orchestration — calls repositories, never touches the DB directly.
+- `repositories/`: Async SQLAlchemy query functions, one file per model (e.g. `tenant_repository.py`).
+  - **Naming convention**: `<model>_repository.py`
+  - **Rules**: only DB queries here — no business logic, no password hashing, no HTTP concerns.
+  - **Architecture flow**: `routers → services → repositories → database (SQLAlchemy / asyncpg)`
+- `core/`: Core utilities, such as database session management, security helpers, and config.
 - `migrations/`: Alembic migration scripts for database schema changes.
-- `config/`: Configuration files and settings management.
 - `tests/`: Unit and integration tests for the application.
 
 ## Development Workflow
@@ -144,6 +147,11 @@ The database connection string is stored in `.env`. Do not hard-code credentials
 │   │   └── __init__.py
 │   ├── routers/
 │   │   └── __init__.py
+│   ├── repositories/
+│   │   ├── __init__.py
+│   │   ├── tenant_repository.py
+│   │   ├── unit_repository.py
+│   │   └── user_repository.py
 │   ├── schemas/
 │   │   └── __init__.py
 │   └── services/
