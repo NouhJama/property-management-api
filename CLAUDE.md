@@ -9,8 +9,9 @@ A property management API that manages properties, units, tenants, and employees
 ## Toolchain
 
 - This project uses **uv** for Python package management (Python 3.13).
-- Database management is handled with **SQLAlchemy** and **Alembic** for migrations. The API will be built using **FastAPI**(Always use the official documentation).
+- Database management is handled with **SQLAlchemy 2.0 (async)** and **Alembic** for migrations. The API will be built using **FastAPI**(Always use the official documentation).
 - Database: **PostgreSQL**, driver: **asyncpg**.
+- All database access is **asynchronous, end to end**: `create_async_engine`, `async_sessionmaker`, `AsyncSession`, and `DeclarativeBase` (SQLAlchemy 2.0 style). Do not introduce sync `create_engine()`/`sessionmaker()` code — the asyncpg driver only works with the async engine.
 - Validation: **Pydantic V2 models** for data validation and settings management.
 
 ## Authentication and security
@@ -39,14 +40,19 @@ uv run <command>
 
 ## Code/Project Organization
 - `app/main.py`: Entry point for the application.
-- `models/`: SQLAlchemy ORM models for database tables.
+- `app/database.py`: The async database foundation layer. Defines:
+  - `engine` — `create_async_engine(settings.database_url, echo=settings.debug, pool_pre_ping=True)`.
+  - `AsyncSessionLocal` — `async_sessionmaker` bound to `engine` (`expire_on_commit=False`, `autoflush=False`).
+  - `Base` — `class Base(DeclarativeBase): pass`; all models inherit from this.
+  - `get_db()` — async generator dependency (`async with AsyncSessionLocal() as session: yield session`) used via FastAPI's `Depends(get_db)`. No model, repository, or business logic belongs in this file.
+- `models/`: SQLAlchemy ORM models for database tables. Inherit from `Base` in `app/database.py`.
 - `schemas/`: Pydantic models for request and response validation.
 - `routers/`: FastAPI routers for different API endpoints.
 - `services/`: Business logic and orchestration — calls repositories, never touches the DB directly.
 - `repositories/`: Async SQLAlchemy query functions, one file per model (e.g. `tenant_repository.py`).
   - **Naming convention**: `<model>_repository.py`
-  - **Rules**: only DB queries here — no business logic, no password hashing, no HTTP concerns.
-  - **Architecture flow**: `routers → services → repositories → database (SQLAlchemy / asyncpg)`
+  - **Rules**: only DB queries here — no business logic, no password hashing, no HTTP concerns. Every function receives an `AsyncSession` (via `Depends(get_db)`) and uses `await`.
+  - **Architecture flow**: `routers → services → repositories → database (SQLAlchemy async / asyncpg)`
 - `core/`: Core utilities, such as database session management, security helpers, and config.
 - `migrations/`: Alembic migration scripts for database schema changes.
 - `tests/`: Unit and integration tests for the application.
