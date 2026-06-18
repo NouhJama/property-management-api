@@ -1,0 +1,33 @@
+{
+  "$schema": "https://claude.ai/schema/settings.json",
+  "permissions": {
+    "allow": [
+      "Bash(uv run pytest:*)",
+      "Bash(uv run uvicorn:*)",
+      "Bash(uv run alembic:*)",
+      "Bash(uv run black:*)",
+      "Bash(uv run flake8:*)",
+      "Bash(uv add:*)",
+      "Bash(uv sync:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git checkout:*)",
+      "Bash(git branch:*)",
+      "Bash(git status:*)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)",
+      "Bash(git pull:*)",
+      "Bash(docker compose ps:*)",
+      "Bash(docker compose up:*)",
+      "Edit(app/**)",
+      "Edit(tests/**)"
+    ],
+    "ask": [
+      "Bash(git push:*)"
+    ],
+    "deny": [
+      "Read(./.env)",
+      "Bash(rm -rf:*)"
+    ]
+  }
+}
