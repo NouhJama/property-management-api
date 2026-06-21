@@ -62,8 +62,7 @@ app = FastAPI(
     title=settings.app_name,
     version=settings.app_version,
     description=(
-        "Property management system for Damal Heights — "
-        "built with async FastAPI and SQLAlchemy."
+        "Property management system for Damal Heights — built with async FastAPI and SQLAlchemy."
     ),
     docs_url="/docs",
     redoc_url="/redoc",
