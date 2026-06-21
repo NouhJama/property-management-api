@@ -145,6 +145,36 @@ git push origin feature/task-name
 
 The database connection string is stored in `.env`. Do not hard-code credentials anywhere — always look up the connection string in `.env`.
 
+## Alembic rules
+
+Every time a new model file is created in `app/models/`, do TWO things immediately:
+1. Import the model class in `migrations/env.py` under the "Model imports" comment block —
+   uncomment the relevant line or add a new import line.
+2. Run: `alembic revision --autogenerate -m "describe the change"`
+3. Review the generated file in `migrations/versions/`
+4. Run: `alembic upgrade head`
+
+Without step 1, Alembic cannot see the table and will generate empty migrations.
+This is the most common Alembic mistake.
+
+Daily Alembic commands:
+```bash
+# Generate a migration after changing or adding a model
+uv run alembic revision --autogenerate -m "description"
+
+# Apply all pending migrations to the database
+uv run alembic upgrade head
+
+# Roll back the last applied migration
+uv run alembic downgrade -1
+
+# Show the current migration the database is on
+uv run alembic current
+
+# Verify models and DB are in sync (no pending changes)
+uv run alembic check
+```
+
 ## SKELETON STRUCTURE
 .
 ├── .env
