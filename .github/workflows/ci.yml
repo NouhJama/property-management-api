@@ -129,3 +129,6 @@ jobs:
           ALGORITHM: HS256
           ACCESS_TOKEN_EXPIRE_MINUTES: 30
           DEBUG: "False"
+          APP_NAME: Property Management API
+          APP_VERSION: 0.1.0
+          ALLOWED_ORIGINS: http://localhost:3000
