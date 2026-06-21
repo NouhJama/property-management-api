@@ -3,6 +3,7 @@
   "permissions": {
     "allow": [
       "Bash(uv run pytest:*)",
+      "Bash(uv run ruff:*)",
       "Bash(uv run uvicorn:*)",
       "Bash(uv run alembic:*)",
       "Bash(uv run black:*)",

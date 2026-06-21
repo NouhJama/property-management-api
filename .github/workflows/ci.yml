@@ -1,0 +1,131 @@
+name: CI
+
+# ---------------------------------------------------------------------------
+# TRIGGERS
+# Run CI on every push to main and on every PR that targets main.
+# This ensures both in-progress work (PRs) and merged work (main) are tested.
+# ---------------------------------------------------------------------------
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# ---------------------------------------------------------------------------
+# CONCURRENCY
+# If you push twice quickly on the same branch, cancel the first run and
+# start fresh with the latest commit. Prevents wasted runner minutes.
+# ---------------------------------------------------------------------------
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    # -------------------------------------------------------------------------
+    # SERVICES — PostgreSQL 15
+    # GitHub Actions spins up this container alongside the job runner.
+    # The app connects to it on localhost:5432 (port-mapped below).
+    # The healthcheck tells the runner to wait until PostgreSQL is actually
+    # ready to accept connections before any of our steps run — without this,
+    # tests would race against the DB startup and fail with connection errors.
+    # -------------------------------------------------------------------------
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: testuser
+          POSTGRES_PASSWORD: testpassword
+          POSTGRES_DB: test_property_db
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U testuser -d test_property_db"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      # -----------------------------------------------------------------------
+      # STEP 1 — Checkout code
+      # Clones the repository into the runner so subsequent steps have access
+      # to all project files.
+      # -----------------------------------------------------------------------
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # -----------------------------------------------------------------------
+      # STEP 2 — Install uv
+      # Uses the official Astral action to install uv (the project's package
+      # manager). enable-cache: true caches the uv binary and the virtual
+      # environment across runs so installs are fast on repeat pushes.
+      # -----------------------------------------------------------------------
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          version: "latest"
+          enable-cache: true
+
+      # -----------------------------------------------------------------------
+      # STEP 3 — Set up Python 3.13
+      # Pins the Python version to match requires-python = ">=3.13" in
+      # pyproject.toml. Using a different version risks subtle incompatibilities
+      # with asyncpg, SQLAlchemy, and other compiled dependencies.
+      # -----------------------------------------------------------------------
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      # -----------------------------------------------------------------------
+      # STEP 4 — Install dependencies
+      # uv sync reads uv.lock and installs every dependency exactly as pinned,
+      # including all dev dependencies (pytest, ruff, black, etc.).
+      # --all-extras ensures optional dependency groups are also installed.
+      # -----------------------------------------------------------------------
+      - name: Install dependencies
+        run: uv sync --all-extras --dev
+
+      # -----------------------------------------------------------------------
+      # STEP 5 — Lint with ruff
+      # ruff check scans for code quality issues (unused imports, undefined
+      # names, PEP 8 violations, etc.) as configured in pyproject.toml.
+      # Fails the build if any issues are found.
+      # -----------------------------------------------------------------------
+      - name: "Lint — ruff"
+        run: uv run ruff check .
+
+      # -----------------------------------------------------------------------
+      # STEP 6 — Check formatting with ruff format
+      # ruff format --check verifies that every file matches the project's
+      # formatting style without modifying any files. Fails if anything is
+      # unformatted, prompting you to run `uv run ruff format .` locally first.
+      # -----------------------------------------------------------------------
+      - name: "Format check — ruff"
+        run: uv run ruff format --check .
+
+      # -----------------------------------------------------------------------
+      # STEP 7 — Run tests with pytest
+      # Runs the full test suite against the live PostgreSQL service above.
+      # -v prints each test name so you can see exactly what passed or failed.
+      # --tb=short prints a concise traceback for failures (not the full wall).
+      #
+      # ENV — these variables are injected into the pytest process at runtime:
+      #   DATABASE_URL    — uses postgresql+asyncpg:// to match the project's
+      #                     async engine (asyncpg is the async PostgreSQL driver).
+      #                     Credentials MUST exactly match the service block above.
+      #   SECRET_KEY      — dummy value for JWT signing in tests; not real.
+      #   ALGORITHM       — JWT signing algorithm, matches app/core/config.py.
+      #   ACCESS_TOKEN_EXPIRE_MINUTES — token TTL, mirrors the app default.
+      #   DEBUG           — "False" so the app behaves like production in CI.
+      # -----------------------------------------------------------------------
+      - name: "Test — pytest"
+        run: uv run pytest tests/ -v --tb=short
+        env:
+          DATABASE_URL: postgresql+asyncpg://testuser:testpassword@localhost:5432/test_property_db
+          SECRET_KEY: ci-test-secret-key-not-for-production
+          ALGORITHM: HS256
+          ACCESS_TOKEN_EXPIRE_MINUTES: 30
+          DEBUG: "False"
