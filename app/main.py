@@ -7,9 +7,9 @@
 # =============================================================================
 from contextlib import asynccontextmanager
 
-from sqlalchemy import text
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy import text
 
 from app.core.config import settings
 from app.database import engine
@@ -45,7 +45,10 @@ async def lifespan(app: FastAPI):
     # -- SHUTDOWN --------------------------------------------------------------
     # Gracefully close all connections in the async connection pool.
     await engine.dispose()
-    print(f"[{settings.app_name} v{settings.app_version}] Shutdown complete — connection pool disposed.")
+    print(
+        f"[{settings.app_name} v{settings.app_version}]"
+        " Shutdown complete — connection pool disposed."
+    )
 
 
 # =============================================================================
@@ -59,8 +62,7 @@ app = FastAPI(
     title=settings.app_name,
     version=settings.app_version,
     description=(
-        "Property management system for Damal Heights — "
-        "built with async FastAPI and SQLAlchemy."
+        "Property management system for Damal Heights — built with async FastAPI and SQLAlchemy."
     ),
     docs_url="/docs",
     redoc_url="/redoc",
