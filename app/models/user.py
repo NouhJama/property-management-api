@@ -82,7 +82,8 @@ class User(Base):
     # datetime.utcnow() which was removed in Python 3.12+.
     # DateTime(timezone=True) tells PostgreSQL to use TIMESTAMPTZ so the
     # timezone offset is preserved in the database.
-    # Timezone is East African Time (EAT) for this application, but we store UTC in the DB for consistency.
+    # Timezone is East African Time (EAT) for this application, but we store UTC in the DB
+    # for consistency.
     # -------------------------------------------------------------------------
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
