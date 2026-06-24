@@ -30,7 +30,7 @@ class User(Base):
     # id
     # Auto-incremented integer primary key. SQLAlchemy sets this on INSERT;
     # we never assign it manually. Every row in the table has a unique id.
-    # Mapped[int] tells SQLAlchemy that this column is an integer, and 
+    # Mapped[int] tells SQLAlchemy that this column is an integer, and
     # mapped_column(primary_key=True) marks it as the primary key.
     # -------------------------------------------------------------------------
     id: Mapped[int] = mapped_column(primary_key=True)
