@@ -73,9 +73,7 @@ class UserRepository:
         Returns:
             The matching User ORM instance, or None if no row exists.
         """
-        result = await self.db.execute(
-            select(User).where(User.id == user_id)
-        )
+        result = await self.db.execute(select(User).where(User.id == user_id))
         # scalar_one_or_none() returns the User object or None.
         # If multiple rows somehow match (impossible with a primary-key
         # constraint, but guarded against here), it raises MultipleResultsFound
@@ -95,9 +93,7 @@ class UserRepository:
         Returns:
             The matching User ORM instance, or None if no row exists.
         """
-        result = await self.db.execute(
-            select(User).where(User.email == email)
-        )
+        result = await self.db.execute(select(User).where(User.email == email))
         # Used in two distinct places in the application:
         #   1. During registration — the service checks the return value;
         #      if not None, the email is already taken and a 409 is raised.
@@ -244,9 +240,7 @@ class UserRepository:
             A list of User ORM instances ordered by created_at descending.
             Returns an empty list if no users exist.
         """
-        result = await self.db.execute(
-            select(User).order_by(User.created_at.desc())
-        )
+        result = await self.db.execute(select(User).order_by(User.created_at.desc()))
         # scalars().all() unpacks the result rows and returns a plain Python
         # list of User objects. Returns [] if the table is empty — never None.
         # order_by created_at desc — newest users appear first in the list.
