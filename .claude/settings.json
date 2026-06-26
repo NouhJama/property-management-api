@@ -30,5 +30,29 @@
       "Read(./.env)",
       "Bash(rm -rf:*)"
     ]
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cd $CLAUDE_PROJECT_DIR && uv run ruff format . && uv run ruff check --fix ."
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Read|Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": ".claude/hooks/block-env.sh"
+          }
+        ]
+      }
+    ]
   }
 }
