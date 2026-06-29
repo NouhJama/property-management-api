@@ -14,6 +14,31 @@ A property management API that manages properties, units, tenants, and employees
 - All database access is **asynchronous, end to end**: `create_async_engine`, `async_sessionmaker`, `AsyncSession`, and `DeclarativeBase` (SQLAlchemy 2.0 style). Do not introduce sync `create_engine()`/`sessionmaker()` code — the asyncpg driver only works with the async engine.
 - Validation: **Pydantic V2 models** for data validation and settings management.
 
+## Documentation & Library Accuracy
+
+This project depends on libraries that evolve quickly. Always fetch current official documentation
+via the **Context7 MCP server** before writing or modifying code that touches the libraries below.
+Do not rely on training-data knowledge alone — it may reflect outdated APIs or deprecated patterns.
+
+| Library | When to fetch docs | Key patterns to follow |
+|---|---|---|
+| **FastAPI** | Before writing any route, dependency, middleware, or lifespan handler | `Annotated` dependencies, `lifespan` context-manager startup/shutdown (not `@app.on_event`), Pydantic v2 response models |
+| **SQLAlchemy (async 2.0)** | Before writing models, queries, or session management | `create_async_engine`, `async_sessionmaker`, `AsyncSession`, `select()` 2.0-style queries — no legacy `Query` API |
+| **Pydantic v2** | Before writing schemas or validators | `model_validator`, `field_validator`, `model_config`, `ConfigDict` — not v1 `@validator` / `class Config` |
+| **Alembic** | Before writing or editing migration scripts or `env.py` | Async engine setup in `env.py`, `run_async_migrations()` pattern |
+
+### How to fetch docs with Context7
+
+```
+# 1. Resolve the library ID
+mcp__context7__resolve-library-id  →  { libraryName: "fastapi" }
+
+# 2. Fetch relevant docs
+mcp__context7__query-docs  →  { context7CompatibleLibraryID: "<id>", query: "<topic>" }
+```
+
+Fetch docs **before** writing code, not after a review catches a stale pattern.
+
 ## Authentication and security
 - Authentication: **JWT**(OAuth2 password flow).
 - Password hashing: **bcrypt** for secure password storage.
