@@ -105,7 +105,10 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
 #
 # Returns a compact string — three Base64URL segments joined by dots.
 # This is the complete token; send it directly to the client.
-def create_access_token(data: dict[str, Any], expires_delta: Optional[timedelta] = None) -> str:
+def create_access_token(
+    data: dict[str, Any],
+    expires_delta: Optional[timedelta] = None,
+) -> str:
     """Create a signed JWT access token.
 
     Called by the auth router after authenticate_user() succeeds — the
