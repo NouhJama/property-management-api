@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Purpose
 
-A property management API that manages properties, units, tenants, and employees, and tracks rent and renovations. Currently in early scaffolding stage — no application code beyond the entry point exists yet.
+A property management API that manages properties, units, tenants, and employees, and tracks rent and renovations. Early stage: the User slice exists end to end (model, schemas, repository, service, security helpers); routers and the remaining resources are not built yet.
 
 ## Toolchain
 
@@ -13,6 +13,7 @@ A property management API that manages properties, units, tenants, and employees
 - Database: **PostgreSQL**, driver: **asyncpg**.
 - All database access is **asynchronous, end to end**: `create_async_engine`, `async_sessionmaker`, `AsyncSession`, and `DeclarativeBase` (SQLAlchemy 2.0 style). Do not introduce sync `create_engine()`/`sessionmaker()` code — the asyncpg driver only works with the async engine.
 - Validation: **Pydantic V2 models** for data validation and settings management.
+  Installed as `pydantic[email]` so `EmailStr` fields work (requires `email-validator`).
 
 ## Documentation & Library Accuracy
 
@@ -40,8 +41,18 @@ mcp__context7__query-docs  →  { context7CompatibleLibraryID: "<id>", query: "<
 Fetch docs **before** writing code, not after a review catches a stale pattern.
 
 ## Authentication and security
-- Authentication: **JWT**(OAuth2 password flow).
-- Password hashing: **bcrypt** for secure password storage.
+- Authentication: **JWT** (OAuth2 password flow), implemented with **PyJWT** (`import jwt`).
+  Do not use `python-jose` — it was removed from this project (unmaintained).
+- Password hashing: **pwdlib[bcrypt]** (`PasswordHash((BcryptHasher(),))`).
+  Do not use `passlib` — it was removed (passlib 1.7.4 is incompatible with bcrypt >= 4.1),
+  and do not call the `bcrypt` library directly.
+- All hashing and JWT logic lives in `app/core/security.py`, which exposes exactly four helpers:
+  `hash_password`, `verify_password`, `create_access_token`, `verify_token`.
+  No other module may import `pwdlib` or `jwt` directly. `verify_token` raises a 401
+  HTTPException ("Could not validate credentials", `WWW-Authenticate: Bearer`) on any
+  invalid token — expired, tampered, or malformed all get the same error.
+- JWT settings come from `.env` via `app/core/config.py`: `secret_key`, `algorithm`,
+  `access_token_expire_minutes`.
 - CORS: Configure CORS middleware to allow requests from trusted origins.
 
 ```bash
@@ -223,7 +234,8 @@ uv run alembic check
 │   ├── database.py
 │   ├── main.py
 │   ├── models/
-│   │   └── __init__.py
+│   │   ├── __init__.py
+│   │   └── user.py
 │   ├── routers/
 │   │   └── __init__.py
 │   ├── repositories/
@@ -232,9 +244,11 @@ uv run alembic check
 │   │   ├── unit_repository.py
 │   │   └── user_repository.py
 │   ├── schemas/
-│   │   └── __init__.py
+│   │   ├── __init__.py
+│   │   └── user.py
 │   └── services/
-│       └── __init__.py
+│       ├── __init__.py
+│       └── user_service.py
 ├── migrations/
 │   └── versions/
 ├── pyproject.toml

@@ -1,8 +1,24 @@
+"""
+Security helpers — password hashing and JWT token handling.
+
+This module is the ONLY place in the application that touches the pwdlib
+and jwt libraries. Every other layer (services, routers, dependencies)
+imports the four public helpers below and never deals with hashing or
+token internals directly:
+
+  hash_password()       — bcrypt-hash a plain-text password (registration).
+  verify_password()     — check a plain-text password against a stored hash (login).
+  create_access_token() — issue a signed JWT after successful authentication.
+  verify_token()        — decode and validate a JWT from an incoming request.
+
+No database access, no HTTP concerns, and no business logic live here.
+"""
+
 # =============================================================================
 # SECTION 1 — Imports
 # =============================================================================
 from datetime import datetime, timedelta, timezone
-from typing import Optional
+from typing import Any, Optional
 
 import jwt
 from fastapi import HTTPException, status
@@ -26,6 +42,9 @@ from app.core.config import settings
 # bcrypt automatically generates a random salt for every hash() call.
 # The salt is embedded inside the resulting hash string, so verify()
 # can re-derive and compare without any extra storage.
+#
+# Adding a new hasher first in this tuple later would migrate users
+# transparently: verify() still accepts the old bcrypt hashes.
 pwd_context = PasswordHash((BcryptHasher(),))
 
 
@@ -45,6 +64,8 @@ def hash_password(plain_password: str) -> str:
     Returns:
         A bcrypt hash string suitable for storage in the database.
     """
+    # pwdlib generates a fresh random salt per call, so hashing the same
+    # password twice produces two different hashes — this is intentional.
     return pwd_context.hash(plain_password)
 
 
@@ -78,41 +99,44 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
 #   "sub" (subject) is the JWT standard claim identifying the user.
 #   "exp" (expiry) is added here — PyJWT validates it automatically on decode.
 #
-# PyJWT signs the payload with SECRET_KEY using the configured algorithm
-# (HS256 by default). Any tampering with the payload invalidates the
-# signature and causes jwt.decode() to raise InvalidTokenError.
+# PyJWT signs the payload with settings.secret_key using the configured
+# algorithm (HS256 by default). Any tampering with the payload invalidates
+# the signature and causes jwt.decode() to raise InvalidTokenError.
 #
 # Returns a compact string — three Base64URL segments joined by dots.
 # This is the complete token; send it directly to the client.
 def create_access_token(
-    data: dict,
+    data: dict[str, Any],
     expires_delta: Optional[timedelta] = None,
 ) -> str:
     """Create a signed JWT access token.
 
+    Called by the auth router after authenticate_user() succeeds — the
+    service layer verifies identity, this helper issues the token.
+
     Args:
         data: Claims to encode — must include {"sub": str(user_id)}.
-        expires_delta: Custom lifetime; defaults to settings value if omitted.
+        expires_delta: Custom lifetime; defaults to
+            settings.access_token_expire_minutes if omitted.
 
     Returns:
         A signed JWT string to return to the client.
     """
+    # Copy so the caller's dict is never mutated when we add the exp claim.
     to_encode = data.copy()
 
-    if expires_delta is not None:
-        expire = datetime.now(timezone.utc) + expires_delta
-    else:
-        expire = datetime.now(timezone.utc) + timedelta(
-            minutes=settings.access_token_expire_minutes
-        )
-
+    # Expiry is always UTC — the "exp" claim is validated by jwt.decode()
+    # on every request, so expired tokens are rejected automatically.
+    expire = datetime.now(timezone.utc) + (
+        expires_delta
+        if expires_delta is not None
+        else timedelta(minutes=settings.access_token_expire_minutes)
+    )
     to_encode.update({"exp": expire})
 
-    return jwt.encode(
-        to_encode,
-        settings.secret_key,
-        algorithm=settings.algorithm,
-    )
+    # Sign with the application secret — settings.secret_key comes from .env
+    # and is never hard-coded anywhere in the codebase.
+    return jwt.encode(to_encode, settings.secret_key, algorithm=settings.algorithm)
 
 
 # =============================================================================
@@ -124,14 +148,15 @@ def create_access_token(
 #
 # InvalidTokenError is the base class for all PyJWT failure modes:
 #   ExpiredSignatureError, DecodeError, InvalidSignatureError, etc.
-# All failure cases map to 401 Unauthorized — callers receive a uniform error.
+# All failure cases map to 401 Unauthorized — callers receive a uniform
+# error and the client is never told WHY the token was rejected.
 #
 # WWW-Authenticate: Bearer in the response header tells the client that
 # it must supply a valid Bearer token to access the resource (RFC 6750).
 #
 # On success, returns the full payload dict.
 # Callers extract the user ID with payload.get("sub").
-def verify_token(token: str) -> dict:
+def verify_token(token: str) -> dict[str, Any]:
     """Decode and validate a JWT access token.
 
     Args:
@@ -141,7 +166,8 @@ def verify_token(token: str) -> dict:
         The decoded payload dict on success.
 
     Raises:
-        HTTPException 401: If the token is expired, tampered, or malformed.
+        HTTPException: 401 if the token is expired, tampered with,
+            malformed, or missing the "sub" claim.
     """
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
@@ -150,14 +176,16 @@ def verify_token(token: str) -> dict:
     )
 
     try:
-        payload = jwt.decode(
-            token,
-            settings.secret_key,
-            algorithms=[settings.algorithm],
-        )
-        user_id: str = payload.get("sub")
-        if user_id is None:
-            raise credentials_exception
-        return payload
+        # decode() verifies the signature and the exp claim in one step.
+        # algorithms is an explicit allow-list — never derived from the
+        # token header, which would allow algorithm-confusion attacks.
+        payload = jwt.decode(token, settings.secret_key, algorithms=[settings.algorithm])
     except InvalidTokenError:
         raise credentials_exception
+
+    # A token without a subject identifies nobody — reject it even though
+    # its signature is valid.
+    if payload.get("sub") is None:
+        raise credentials_exception
+
+    return payload
