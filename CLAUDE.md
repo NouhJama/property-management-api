@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Purpose
 
-A property management API that manages properties, units, tenants, and employees, and tracks rent and renovations. Early stage: the User slice exists end to end (model, schemas, repository, service, security helpers); routers and the remaining resources are not built yet.
+A property management API that manages properties, units, tenants, and employees, and tracks rent and renovations. Early stage: the User slice exists end to end (model, schemas, repository, service, security helpers, dependency wiring); routers and the remaining resources are not built yet.
 
 ## Toolchain
 
@@ -90,6 +90,15 @@ uv run <command>
   - **Rules**: only DB queries here — no business logic, no password hashing, no HTTP concerns. Every function receives an `AsyncSession` (via `Depends(get_db)`) and uses `await`.
   - **Architecture flow**: `routers → services → repositories → database (SQLAlchemy async / asyncpg)`
 - `core/`: Core utilities, such as database session management, security helpers, and config.
+  - `app/core/dependencies.py`: The dependency-wiring (composition) layer. Two jobs:
+    1. **Assembly** — factory chain `get_db → get_user_repository → get_user_service`, so routes
+       declare `Annotated[UserService, Depends(get_user_service)]` instead of building the chain
+       by hand. New resources follow the same pattern: `get_<model>_repository` / `get_<model>_service`.
+    2. **Authentication** — `oauth2_scheme` (`OAuth2PasswordBearer`, `tokenUrl="api/v1/auth/login"`),
+       `get_current_user` (JWT → verified, active `User`; any failure — bad token, unknown or
+       deleted user — returns the same generic 401; deactivated account returns 400), and
+       `get_current_active_superuser` (chains on `get_current_user`, raises 403 for non-admins).
+    No business logic, queries, or hashing/JWT internals here — it only wires existing pieces.
 - `migrations/`: Alembic migration scripts for database schema changes.
 - `tests/`: Unit and integration tests for the application.
 
