@@ -13,6 +13,7 @@ from sqlalchemy import text
 
 from app.core.config import settings
 from app.database import engine
+from app.routers import auth
 
 
 # =============================================================================
@@ -91,7 +92,17 @@ app.add_middleware(
 
 
 # =============================================================================
-# Section 5 — System endpoints
+# Section 5 — Routers
+#
+# Mounts the auth router under /api/v1, producing /api/v1/auth/register,
+# /api/v1/auth/login, and /api/v1/auth/me — matching the tokenUrl declared
+# in app/core/dependencies.py.
+# =============================================================================
+app.include_router(auth.router, prefix="/api/v1")
+
+
+# =============================================================================
+# Section 6 — System endpoints
 #
 # Lightweight routes for monitoring and discovery. These are intentionally
 # kept separate from the business-domain routers added later. Both are tagged

@@ -178,3 +178,19 @@ class UserInDB(UserResponse):
     # Explicitly repeated from UserResponse — inherited automatically, but
     # stated here to make it clear this schema also reads from ORM objects.
     model_config = ConfigDict(from_attributes=True)
+
+
+# =============================================================================
+# SECTION 7 — Token
+# =============================================================================
+class Token(BaseModel):
+    """
+    The response shape returned by POST /auth/login.
+
+    access_token is the JWT string the client must send back in the
+    "Authorization: Bearer <token>" header on protected routes.
+    token_type is always "bearer" (OAuth2 convention).
+    """
+
+    access_token: str
+    token_type: str
