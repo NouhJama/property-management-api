@@ -21,7 +21,7 @@ from app.main import app
 # SECTION 2 — Test database URL
 # =============================================================================
 # Points at the local test database, never property_db.
-TEST_DATABASE_URL = "postgresql+asyncpg://damal:damal123@localhost:5432/test_property_db"
+TEST_DATABASE_URL = "postgresql+asyncpg://testuser:testpassword@localhost:5432/test_property_db"
 
 
 # =============================================================================
