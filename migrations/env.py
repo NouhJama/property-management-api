@@ -52,6 +52,7 @@ if config.config_file_name is not None:
 # =============================================================================
 from app.core.config import settings  # noqa: E402
 from app.database import Base  # noqa: E402
+from app.models.unit import Unit  # noqa: E402, F401
 
 # ── Model imports ──────────────────────────────────────────────────────────────
 # IMPORTANT: import every model here as you create it.
