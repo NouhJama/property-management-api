@@ -17,7 +17,7 @@ import enum
 from datetime import datetime, timezone
 from typing import Optional
 
-from sqlalchemy import DateTime, Float, Integer, String
+from sqlalchemy import DateTime, Float, ForeignKey, Integer, String
 from sqlalchemy import Enum as SQLEnum
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -115,6 +115,21 @@ class Unit(Base):
     status: Mapped[UnitStatus] = mapped_column(
         SQLEnum(UnitStatus),
         default=UnitStatus.AVAILABLE,
+        nullable=False,
+    )
+
+    # -------------------------------------------------------------------------
+    # owner_id
+    # NEVER nullable — every Unit must have an owner at all times.
+    # Points to a real individual owner, OR to the single row representing
+    # Damal Heights itself for units not yet sold.
+    # No ondelete specified — PostgreSQL falls back to NO ACTION (effectively
+    # RESTRICT), meaning it will BLOCK deleting an Owner as long as any Unit
+    # still references them. This field is essential business data, not just
+    # audit trivia, so it must never silently become invalid.
+    # -------------------------------------------------------------------------
+    owner_id: Mapped[int] = mapped_column(
+        ForeignKey("owners.id"),
         nullable=False,
     )
 
