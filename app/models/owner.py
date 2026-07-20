@@ -18,7 +18,7 @@ import enum
 from datetime import datetime, timezone
 from typing import Optional
 
-from sqlalchemy import DateTime, String
+from sqlalchemy import DateTime, Index, String
 from sqlalchemy import Enum as SQLEnum
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -127,6 +127,44 @@ class Owner(Base):
         default=None,
         onupdate=lambda: datetime.now(timezone.utc),
         nullable=True,
+    )
+
+    # -------------------------------------------------------------------------
+    # __table_args__ — ix_owners_single_company
+    #
+    # A PARTIAL unique index: `postgresql_where=(type == OwnerType.COMPANY)`
+    # means the uniqueness check applies ONLY to rows matching that
+    # condition. Individual owners are completely unaffected and can repeat
+    # type=OwnerType.INDIVIDUAL freely — the index simply doesn't index them.
+    #
+    # `type` (bare, not `Owner.type`) is used because this expression is
+    # evaluated while the class body is still executing — `Owner` doesn't
+    # exist as a name yet at this point, only the local `type` binding
+    # created by the `mapped_column()` assignment above does. Comparing
+    # against the OwnerType enum member (not a raw string) lets SQLAlchemy's
+    # SQLEnum(OwnerType) type handle the DB-side representation itself,
+    # rather than this code hardcoding it — SQLEnum stores Python enum
+    # member NAMES as the native PostgreSQL enum labels (i.e. 'COMPANY',
+    # not the lowercase value 'company'; see the seed migration
+    # b63ef847e9c6_seed_damal_heights_owner.py, which inserts type='COMPANY'
+    # for exactly this reason).
+    #
+    # This is a second, independent layer of protection behind OwnerCreate
+    # excluding the `type` field from client input. It guards against paths
+    # that bypass the normal API entirely — direct SQL, admin scripts, or a
+    # future accidental reintroduction of the `type` field to OwnerCreate.
+    # If violated, PostgreSQL rejects the INSERT/UPDATE and the error
+    # surfaces in Python as sqlalchemy.exc.IntegrityError — this is not
+    # expected to ever fire during normal API usage, since OwnerCreate
+    # already prevents clients from specifying `type` at all.
+    # -------------------------------------------------------------------------
+    __table_args__ = (
+        Index(
+            "ix_owners_single_company",
+            "type",
+            unique=True,
+            postgresql_where=(type == OwnerType.COMPANY),
+        ),
     )
 
     def __repr__(self) -> str:
