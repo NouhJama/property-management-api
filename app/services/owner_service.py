@@ -19,6 +19,8 @@ Out of scope for this file:
 # =============================================================================
 # SECTION 1 — Imports
 # =============================================================================
+import logging
+
 from fastapi import HTTPException, status
 
 # Owner is imported as a type annotation only.
@@ -28,6 +30,8 @@ from fastapi import HTTPException, status
 from app.models.owner import Owner, OwnerType
 from app.repositories.owner_repository import OwnerRepository
 from app.schemas.owner import OwnerCreate, OwnerUpdate
+
+logger = logging.getLogger(__name__)
 
 
 # =============================================================================
@@ -99,6 +103,10 @@ class OwnerService:
         This is the default owner_id used when creating a Unit that hasn't
         been sold yet. Used by UnitService when creating new units.
 
+        Logs a critical-level diagnostic message server-side if the company
+        row is missing, but returns only a generic error to the client —
+        internal system state must never be exposed via HTTPException detail.
+
         Returns:
             The company Owner instance.
 
@@ -110,11 +118,15 @@ class OwnerService:
             # 500, not 404: this is not a "client made a mistake" error — a
             # missing company row means the system itself is misconfigured
             # (the seed migration wasn't run). The client calling this has no
-            # way to fix it themselves.
+            # way to fix it themselves. The concrete diagnostic goes to the
+            # server log only; the client sees a generic message so no
+            # internal implementation detail leaks over the wire.
+            logger.critical(
+                "Company owner row missing — check that the seed migration has been applied."
+            )
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Company owner row is missing — check that the "
-                "seed migration has been applied.",
+                detail="An unexpected error occurred. Please try again or contact support.",
             )
         # The partial unique index guarantees there is never MORE than one —
         # this method only needs to guard against zero, so taking the first
