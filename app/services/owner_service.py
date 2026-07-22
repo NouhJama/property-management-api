@@ -212,7 +212,7 @@ class OwnerService:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
                 detail=f"Cannot delete owner with id {owner.id}"
-                        " There may be a one or more units still associated with this owner.",
+                " There may be a one or more units still associated with this owner.",
             )
 
     # =========================================================================
