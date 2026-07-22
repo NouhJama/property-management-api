@@ -25,6 +25,7 @@ Out of scope for this file:
 from typing import Optional
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.owner import Owner, OwnerType
@@ -221,9 +222,16 @@ class OwnerRepository:
         not re-fetch inside delete — single responsibility: just delete what
         it receives.
 
+        PostgreSQL's RESTRICT on Unit.owner_id means this will raise
+        IntegrityError if any Unit still references this owner. This method
+        rolls back the broken transaction and re-raises the SAME
+        IntegrityError, unmodified — it never raises HTTPException itself,
+        so it stays usable outside an HTTP context. Translating the error
+        into a client-facing message is the SERVICE layer's job.
+
         Args:
             owner: The Owner ORM instance to be deleted. Must already be
-                   loaded by the session (e.g. retrieved via get_by_id).
+                loaded by the session (e.g. retrieved via get_by_id).
         """
         # delete() — marks the object for removal and issues DELETE on commit.
         #
@@ -231,8 +239,12 @@ class OwnerRepository:
         # Unit) means this delete will FAIL with an IntegrityError if any Unit
         # still references this owner — the repository does not need to check
         # for that itself, the database enforces it.
-        await self.db.delete(owner)
-        await self.db.commit()
+        try:
+            await self.db.delete(owner)
+            await self.db.commit()
+        except IntegrityError:
+            await self.db.rollback()
+            raise
 
     # =========================================================================
     # SECTION 8 — get_all

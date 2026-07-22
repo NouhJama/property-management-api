@@ -22,6 +22,7 @@ Out of scope for this file:
 import logging
 
 from fastapi import HTTPException, status
+from sqlalchemy.exc import IntegrityError
 
 # Owner is imported as a type annotation only.
 # The service never instantiates Owner() or writes queries — that is the
@@ -203,7 +204,16 @@ class OwnerService:
         """
         # Delegate the delete to the repository — the owner's existence was
         # already confirmed by the router via get_owner_by_id.
-        await self.repo.delete(owner)
+        # catches the database integrity error and translates to
+        # user friendly message.
+        try:
+            await self.repo.delete(owner)
+        except IntegrityError:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"Cannot delete owner with id {owner.id}"
+                        " There may be a one or more units still associated with this owner.",
+            )
 
     # =========================================================================
     # SECTION 8 — get_all_owners
