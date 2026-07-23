@@ -17,7 +17,8 @@ JSON and the service layer. No business logic, no DB access here.
 from datetime import datetime
 from typing import Optional
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
+from pydantic_extra_types.phone_numbers import PhoneNumber
 
 # OwnerType is reused directly from the model, not redefined here — one
 # definition shared across the database layer and the API layer, so the
@@ -26,7 +27,30 @@ from app.models.owner import OwnerType
 
 
 # =============================================================================
-# SECTION 2 — OwnerBase
+# SECTION 2 — DamalPhoneNumber type
+# =============================================================================
+# Intended for reuse by ANY future model that needs phone validation (e.g. a
+# future Client model), not just Owner — hence the general, non-Kenya-exclusive
+# name even though Kenya is merely the default region.
+class DamalPhoneNumber(PhoneNumber):
+    """Application-wide phone number type.
+
+    Defaults to Kenya (KE) when a client sends a number with no
+    explicit country code, but accepts and correctly validates
+    international numbers with any country code just as well.
+    Always normalizes to E164 format (e.g. "+254707234780") — the
+    most compact standard representation, chosen specifically to
+    fit within our String(20) database columns (RFC3966, the
+    library's other common format, includes a "tel:" prefix and
+    hyphens that can exceed 20 characters for some valid numbers).
+    """
+
+    default_region_code = "KE"
+    phone_format = "E164"
+
+
+# =============================================================================
+# SECTION 3 — OwnerBase
 # =============================================================================
 class OwnerBase(BaseModel):
     """
@@ -37,13 +61,14 @@ class OwnerBase(BaseModel):
     """
 
     # The owner's full legal name (individual) or company name.
-    # min_length=1 rejects empty strings; max_length matches String(255)
-    # on the Owner model.
-    name: str = Field(min_length=1, max_length=255)
+    # min_length=2 rejects trivially short names; max_length matches
+    # String(255) on the Owner model. See strip_and_validate_name below for
+    # why min_length alone is not enough.
+    name: str = Field(min_length=2, max_length=255)
 
-    # Optional contact phone number. max_length matches String(20) on the
-    # model — covers international formats with country code and separators.
-    phone: Optional[str] = Field(default=None, max_length=20)
+    # Optional contact phone number, validated as a real Kenyan-defaulted
+    # number and stored in E.164 form. See the DamalPhoneNumber type above.
+    phone: Optional[DamalPhoneNumber] = None
 
     # Optional contact email address. max_length matches String(255) on the
     # model.
@@ -53,9 +78,30 @@ class OwnerBase(BaseModel):
     # max_length matches String(50) on the model.
     national_id: Optional[str] = Field(default=None, max_length=50)
 
+    @field_validator("name")
+    @classmethod
+    def strip_and_validate_name(cls, v: str) -> str:
+        """Strip surrounding whitespace, then re-check the cleaned length.
+
+        min_length=2 on the Field alone is not enough: a raw value like " "
+        (a single space) or "a " (one stray character plus padding) would
+        satisfy the length check while being a meaningless name. This
+        validator strips whitespace FIRST, then re-checks the length on the
+        cleaned value, and returns that cleaned value so leading/trailing
+        whitespace never gets stored.
+
+        min_length=2 is a reasonable floor without being overly strict —
+        deliberately no character-pattern regex, since real names legitimately
+        include hyphens, apostrophes, and non-Latin scripts.
+        """
+        stripped = v.strip()
+        if len(stripped) < 2:
+            raise ValueError("Name must be at least 2 characters")
+        return stripped
+
 
 # =============================================================================
-# SECTION 3 — OwnerCreate
+# SECTION 4 — OwnerCreate
 # =============================================================================
 class OwnerCreate(OwnerBase):
     """
@@ -77,7 +123,7 @@ class OwnerCreate(OwnerBase):
 
 
 # =============================================================================
-# SECTION 4 — OwnerUpdate
+# SECTION 5 — OwnerUpdate
 # =============================================================================
 class OwnerUpdate(BaseModel):
     """
@@ -94,11 +140,14 @@ class OwnerUpdate(BaseModel):
     """
 
     # Optional here, unlike OwnerBase — if omitted, the name is not changed.
-    # min_length=1 still rejects an explicit empty string.
-    name: Optional[str] = Field(default=None, min_length=1, max_length=255)
+    # min_length=2 still rejects an explicit empty or trivially short string;
+    # the validator below applies the same strip-then-recheck as OwnerBase
+    # whenever a value is actually provided.
+    name: Optional[str] = Field(default=None, min_length=2, max_length=255)
 
-    # If omitted, the phone number is not changed.
-    phone: Optional[str] = Field(default=None, max_length=20)
+    # If omitted, the phone number is not changed. When provided, validated
+    # and stored the same way as OwnerBase — see the DamalPhoneNumber type above.
+    phone: Optional[DamalPhoneNumber] = None
 
     # If omitted, the email address is not changed.
     email: Optional[EmailStr] = Field(default=None, max_length=255)
@@ -106,9 +155,26 @@ class OwnerUpdate(BaseModel):
     # If omitted, the national ID is not changed.
     national_id: Optional[str] = Field(default=None, max_length=50)
 
+    @field_validator("name")
+    @classmethod
+    def strip_and_validate_name(cls, v: Optional[str]) -> Optional[str]:
+        """Same strip-then-recheck as OwnerBase, but None-aware.
+
+        On a PATCH, name is optional: None means "leave the name unchanged",
+        so it passes through untouched. When a real string IS provided, it is
+        stripped and re-checked exactly as in OwnerBase — see that validator
+        for why min_length alone is insufficient.
+        """
+        if v is None:
+            return v
+        stripped = v.strip()
+        if len(stripped) < 2:
+            raise ValueError("Name must be at least 2 characters")
+        return stripped
+
 
 # =============================================================================
-# SECTION 5 — OwnerResponse
+# SECTION 6 — OwnerResponse
 # =============================================================================
 class OwnerResponse(BaseModel):
     """
