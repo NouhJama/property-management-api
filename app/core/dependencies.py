@@ -33,7 +33,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.security import verify_token
 from app.database import get_db
 from app.models.user import User
+from app.repositories.owner_repository import OwnerRepository
 from app.repositories.user_repository import UserRepository
+from app.services.owner_service import OwnerService
 from app.services.user_service import UserService
 
 # =============================================================================
@@ -90,6 +92,48 @@ def get_user_service(
         A UserService wired to this request's repository and session.
     """
     return UserService(repository)
+
+
+def get_owner_repository(
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> OwnerRepository:
+    """Build an OwnerRepository bound to the request-scoped session.
+
+    FastAPI resolves get_db first, then injects the resulting
+    AsyncSession here. Plain def — it only constructs an object and
+    awaits nothing itself.
+
+    Args:
+        db: The request-scoped AsyncSession from get_db().
+
+    Returns:
+        An OwnerRepository ready to execute queries on this request's session.
+    """
+    return OwnerRepository(db)
+
+
+def get_owner_service(
+    repository: Annotated[OwnerRepository, Depends(get_owner_repository)],
+) -> OwnerService:
+    """Build an OwnerService on top of the request-scoped repository.
+
+    Completes the assembly chain get_db → get_owner_repository → here,
+    so a route only declares:
+        service: Annotated[OwnerService, Depends(get_owner_service)]
+    to receive a finished service.
+
+    No Owner-specific auth guard is added here. Owner routes reuse the
+    existing get_current_user and get_current_active_superuser
+    dependencies as-is — those verify identity generically and have no
+    dependency on which resource is being protected.
+
+    Args:
+        repository: The request-scoped OwnerRepository.
+
+    Returns:
+        An OwnerService wired to this request's repository and session.
+    """
+    return OwnerService(repository)
 
 
 # =============================================================================
