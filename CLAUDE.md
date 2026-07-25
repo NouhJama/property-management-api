@@ -55,6 +55,17 @@ Fetch docs **before** writing code, not after a review catches a stale pattern.
   `access_token_expire_minutes`.
 - CORS: Configure CORS middleware to allow requests from trusted origins.
 
+## Business rules
+
+### Owner permissions
+- CREATE, UPDATE, DELETE on Owner: admin only
+  (`Depends(get_current_active_superuser)`)
+- READ/LIST Owners: any logged-in staff
+  (`Depends(get_current_user)`)
+- Uses `get_owner_service` from `app/core/dependencies.py` for assembly;
+  reuses the existing User-based auth guards directly — no Owner-specific
+  auth dependency exists or is needed.
+
 ```bash
 # Install dependencies
 uv sync
