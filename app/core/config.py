@@ -20,6 +20,10 @@ class Settings(BaseSettings):
     # CORS
     allowed_origins: str
 
+    # Admin bootstrap
+    admin_email: str
+    admin_password: str
+
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
 
