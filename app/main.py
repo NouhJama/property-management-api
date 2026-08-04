@@ -13,7 +13,7 @@ from sqlalchemy import text
 
 from app.core.config import settings
 from app.database import engine
-from app.routers import auth
+from app.routers import auth, owners
 
 
 # =============================================================================
@@ -97,8 +97,12 @@ app.add_middleware(
 # Mounts the auth router under /api/v1, producing /api/v1/auth/register,
 # /api/v1/auth/login, and /api/v1/auth/me — matching the tokenUrl declared
 # in app/core/dependencies.py.
+#
+# Mounts the owner router under /api/v1, producing /api/v1/owners,
+# /api/v1/owners/{owner_id}, etc.
 # =============================================================================
 app.include_router(auth.router, prefix="/api/v1")
+app.include_router(owners.router, prefix="/api/v1")
 
 
 # =============================================================================
