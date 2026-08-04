@@ -1,3 +1,5 @@
+from typing import Optional
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -19,6 +21,10 @@ class Settings(BaseSettings):
 
     # CORS
     allowed_origins: str
+
+    # Admin bootstrap
+    admin_email: Optional[str] = None
+    admin_password: Optional[str] = None
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
