@@ -21,8 +21,8 @@ class Settings(BaseSettings):
     allowed_origins: str
 
     # Admin bootstrap
-    admin_email: str
-    admin_password: str
+    admin_email: str = None
+    admin_password: str = None
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
