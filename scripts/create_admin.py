@@ -77,6 +77,16 @@ async def create_admin() -> None:
     Idempotent: a second run finds the existing user and returns without
     touching the database.
     """
+
+    # before doing anything, check that the .env file actually has the required
+    # values. This is a sanity check to avoid creating an account with a blank
+    # email or password if the .env file is misconfigured. The script will
+    # fail later anyway, but this gives a clearer error message.
+    if not settings.admin_email or not settings.admin_password:
+        raise ValueError(
+            "ADMIN_EMAIL and ADMIN_PASSWORD must be set in .env before running this script."
+        )
+
     # Step 1 — Open a session directly.
     #
     # This script runs outside any HTTP request, so there is no get_db()
