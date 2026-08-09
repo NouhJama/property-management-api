@@ -192,12 +192,16 @@ class OwnerService:
         The router fetches the owner first via get_owner_by_id. Note:
         PostgreSQL will REJECT this delete with an IntegrityError if any
         Unit.owner_id still references this owner (the foreign key uses
-        RESTRICT, not SET NULL) — the caller must reassign or delete those
-        Units first. This method does not catch that error itself; it
-        propagates up as an unhandled 500 for now. Revisit once UnitService
-        exists, to decide whether to catch IntegrityError here and convert it
-        to a clean 409 Conflict with a message like "Cannot delete an owner
-        who still owns one or more units."
+        RESTRICT, not SET NULL). This method catches that error and
+        translates it into a clean 409 Conflict for the client, rather
+        than letting a raw database error propagate as an unhandled 500.
+
+        owner.id is captured into a plain variable BEFORE the delete is
+        attempted, because rollback() (triggered inside the repository
+        on failure) expires the owner object — reading owner.id directly
+        inside the except block would trigger SQLAlchemy's synchronous
+        lazy-load path, which raises MissingGreenlet since there's no
+        active async bridge at that point.
 
         Args:
             owner: The Owner instance to delete.
@@ -206,12 +210,16 @@ class OwnerService:
         # already confirmed by the router via get_owner_by_id.
         # catches the database integrity error and translates to
         # user friendly message.
+        # Capture the owner id for the IntegrityError message, since-
+        # the owner object will be gone after the delete attempt on-
+        # try block.
+        owner_id = owner.id
         try:
             await self.repo.delete(owner)
         except IntegrityError:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail=f"Cannot delete owner with id {owner.id}"
+                detail=f"Cannot delete owner with id {owner_id}"
                 " There may be a one or more units still associated with this owner.",
             )
 
