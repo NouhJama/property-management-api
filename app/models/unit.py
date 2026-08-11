@@ -95,9 +95,11 @@ class Unit(Base):
     # -------------------------------------------------------------------------
     # bedrooms
     # Number of bedrooms: null = concept doesn't apply (shop/office/restaurant),
-    # 0 = studio-like (lodge), 2 or 3 = apartments. null and 0 are deliberately
-    # different — null means "not applicable", 0 means "applicable, and the
-    # answer is zero".
+    # 1 or 2 = lodge (self-contained units, confirmed via site engineer and
+    # floor plans), 2 or 3 = apartments. Actual enforcement of these
+    # combinations lives in the Pydantic schema layer (schemas/unit.py's
+    # validate_bedrooms_for_type), not as a database-level constraint on this
+    # column.
     # -------------------------------------------------------------------------
     bedrooms: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
 
