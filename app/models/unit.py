@@ -136,6 +136,24 @@ class Unit(Base):
     )
 
     # -------------------------------------------------------------------------
+    # created_by
+    # Nullable audit trail ONLY — tracks which staff member (User) created
+    # this Unit record.
+    # NOT an ownership or ORM relationship() — just a plain foreign key
+    # column. Querying the actual User requires a separate lookup via
+    # UserRepository, not automatic loading. Note the contrast with owner_id
+    # directly above: that is essential business data (who legally owns the
+    # unit) and must never be null, whereas this is audit trivia.
+    # ondelete="SET NULL": if the referencing User account is ever deleted,
+    # this field clears to NULL rather than blocking the User deletion or
+    # cascading to delete the Unit.
+    # -------------------------------------------------------------------------
+    created_by: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+
+    # -------------------------------------------------------------------------
     # created_at
     # The exact UTC timestamp when this row was first inserted.
     # Set automatically on INSERT via the lambda default — never updated after
