@@ -192,6 +192,13 @@ class OwnerResponse(BaseModel):
 
     Does not inherit from OwnerBase because it is a completely independent
     read schema — it represents what we expose, not what we accept.
+
+    created_by appears HERE ONLY — never on OwnerCreate or OwnerUpdate. The
+    service sets it from the authenticated admin making the request (via
+    get_current_active_superuser), never from client input. This is the same
+    defensive pattern as excluding is_superuser from UserCreate and type from
+    OwnerCreate: the field literally does not exist on the input schemas for a
+    client to send, and Pydantic ignores unknown fields by default.
     """
 
     # Primary key — always present on a persisted owner.
@@ -214,6 +221,11 @@ class OwnerResponse(BaseModel):
     # Reused directly from the model — serialises to its string value
     # ("individual" / "company") because OwnerType inherits from str.
     type: OwnerType
+
+    # The admin user who created this owner, as a plain foreign key. Optional
+    # so rows created outside the normal API flow (e.g. the company seed
+    # migration) can still be serialised.
+    created_by: Optional[int] = None
 
     # UTC timestamp of when the row was first created.
     created_at: datetime

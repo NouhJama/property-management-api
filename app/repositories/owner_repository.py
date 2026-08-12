@@ -117,6 +117,7 @@ class OwnerRepository:
         phone: Optional[str] = None,
         email: Optional[str] = None,
         national_id: Optional[str] = None,
+        created_by: Optional[int] = None,
     ) -> Owner:
         """
         Insert a new Owner row into the database.
@@ -134,6 +135,12 @@ class OwnerRepository:
             phone:       Optional contact phone number.
             email:       Optional contact email address.
             national_id: Optional government-issued identification number.
+            created_by:  Optional id of the User (staff member) who created
+                         this row — a pure audit trail. Defaults to None so
+                         non-HTTP callers (scripts, data migrations) can
+                         insert owners without attributing them to a user.
+                         The service passes the authenticated admin's id
+                         through from the router.
 
         Returns:
             The newly created Owner instance, fully populated from the DB
@@ -145,6 +152,7 @@ class OwnerRepository:
             phone=phone,
             email=email,
             national_id=national_id,
+            created_by=created_by,
         )
 
         # add() — stages the object in the session's identity map.

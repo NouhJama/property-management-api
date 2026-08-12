@@ -73,12 +73,14 @@ async def create_owner(
         payload: The validated owner-creation data from the client.
         service: The request-scoped OwnerService.
         admin: The authenticated superuser — presence of this dependency is
-            what enforces admin-only access (403 for non-admins).
+            what enforces admin-only access (403 for non-admins). Its id is
+            also recorded on the new row as created_by, the audit trail of
+            which staff member created this owner.
 
     Returns:
         The newly created owner, serialised through OwnerResponse.
     """
-    return await service.create_owner(payload)
+    return await service.create_owner(payload, created_by=admin.id)
 
 
 # =============================================================================
