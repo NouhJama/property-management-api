@@ -18,7 +18,7 @@ import enum
 from datetime import datetime, timezone
 from typing import Optional
 
-from sqlalchemy import DateTime, Index, String
+from sqlalchemy import DateTime, ForeignKey, Index, String
 from sqlalchemy import Enum as SQLEnum
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -96,6 +96,22 @@ class Owner(Base):
     # not just in Python.
     # -------------------------------------------------------------------------
     type: Mapped[OwnerType] = mapped_column(SQLEnum(OwnerType), nullable=False)
+
+    # -------------------------------------------------------------------------
+    # created_by
+    # Nullable audit trail ONLY — tracks which staff member (User) created
+    # this Owner record.
+    # NOT an ownership or ORM relationship() — just a plain foreign key
+    # column. Querying the actual User requires a separate lookup via
+    # UserRepository, not automatic loading.
+    # ondelete="SET NULL": if the referencing User account is ever deleted,
+    # this field clears to NULL rather than blocking the User deletion or
+    # cascading to delete the Owner.
+    # -------------------------------------------------------------------------
+    created_by: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
 
     # -------------------------------------------------------------------------
     # created_at

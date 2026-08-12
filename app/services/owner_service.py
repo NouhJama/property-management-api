@@ -67,7 +67,7 @@ class OwnerService:
     # =========================================================================
     # SECTION 3 — create_owner
     # =========================================================================
-    async def create_owner(self, payload: OwnerCreate) -> Owner:
+    async def create_owner(self, payload: OwnerCreate, created_by: int) -> Owner:
         """
         Create a new INDIVIDUAL owner.
 
@@ -78,6 +78,12 @@ class OwnerService:
 
         Args:
             payload: The validated owner-creation data from the client.
+            created_by: The id of the authenticated admin creating this owner,
+                passed down by the router from get_current_active_superuser.
+                A required parameter here — every owner created through the
+                API is attributed to the admin who made the request, and it is
+                never read from the client payload (OwnerCreate has no such
+                field).
 
         Returns:
             The newly created Owner instance.
@@ -92,6 +98,7 @@ class OwnerService:
             phone=payload.phone,
             email=payload.email,
             national_id=payload.national_id,
+            created_by=created_by,
         )
 
     # =========================================================================
