@@ -34,8 +34,10 @@ from app.core.security import verify_token
 from app.database import get_db
 from app.models.user import User
 from app.repositories.owner_repository import OwnerRepository
+from app.repositories.unit_repository import UnitRepository
 from app.repositories.user_repository import UserRepository
 from app.services.owner_service import OwnerService
+from app.services.unit_service import UnitService
 from app.services.user_service import UserService
 
 # =============================================================================
@@ -134,6 +136,47 @@ def get_owner_service(
         An OwnerService wired to this request's repository and session.
     """
     return OwnerService(repository)
+
+
+def get_unit_repository(
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> UnitRepository:
+    """Build a UnitRepository with a live database session.
+
+    Uses the Annotated[Type, Depends(...)] syntax, FastAPI's currently
+    recommended form and the style every dependency in this file already
+    follows. New dependency functions default to it.
+
+    Args:
+        db: The request-scoped AsyncSession from get_db().
+
+    Returns:
+        A UnitRepository ready to execute queries on this request's session.
+    """
+    return UnitRepository(db)
+
+
+def get_unit_service(
+    repository: Annotated[UnitRepository, Depends(get_unit_repository)],
+) -> UnitService:
+    """Build a UnitService with a repository.
+
+    Completes the assembly chain: get_db → get_unit_repository → here,
+    so a route only declares:
+        service: Annotated[UnitService, Depends(get_unit_service)]
+    to receive a finished service.
+
+    No new auth guard needed — the (not yet built) unit router reuses the
+    existing get_current_user and get_current_active_superuser directly,
+    exactly as Owner does.
+
+    Args:
+        repository: The request-scoped UnitRepository.
+
+    Returns:
+        A UnitService wired to this request's repository and session.
+    """
+    return UnitService(repository)
 
 
 # =============================================================================
