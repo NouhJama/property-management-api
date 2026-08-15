@@ -110,6 +110,12 @@ uv run <command>
        deleted user — returns the same generic 401; deactivated account returns 400), and
        `get_current_active_superuser` (chains on `get_current_user`, raises 403 for non-admins).
     No business logic, queries, or hashing/JWT internals here — it only wires existing pieces.
+
+    Note: every dependency in this file uses the `Annotated[Type, Depends(...)]` syntax —
+    FastAPI's current recommendation — rather than the older default-value style
+    (`db: AsyncSession = Depends(get_db)`). The two are functionally identical, but the file is
+    uniformly on `Annotated` and new dependency functions should default to it unless told
+    otherwise.
 - `migrations/`: Alembic migration scripts for database schema changes.
 - `tests/`: Unit and integration tests for the application.
 
