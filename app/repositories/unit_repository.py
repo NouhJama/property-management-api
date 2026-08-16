@@ -200,7 +200,21 @@ class UnitRepository:
         # commit() — opens a transaction, flushes the INSERT to PostgreSQL,
         # and commits. After this call the row exists in the DB and PostgreSQL
         # has assigned id and created_at.
-        await self.db.commit()
+        #
+        # Unlike OwnerRepository.create(), this commit needs rollback handling:
+        # owner_id is a real FOREIGN KEY, so an owner_id pointing at no existing
+        # owner makes commit() fail with an IntegrityError. Without the
+        # rollback, the session's transaction would stay in a broken state for
+        # the rest of the request — every later query on it would fail too.
+        #
+        # Bare re-raise, same as delete() — the repository never raises
+        # HTTPException, so it stays usable outside an HTTP context. Translating
+        # this into a client-facing error is the SERVICE layer's job.
+        try:
+            await self.db.commit()
+        except IntegrityError:
+            await self.db.rollback()
+            raise
 
         # refresh() — issues a SELECT to reload the row from the DB back onto
         # the Python object. Without this, unit.id and unit.created_at would
