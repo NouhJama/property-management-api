@@ -13,7 +13,7 @@ from sqlalchemy import text
 
 from app.core.config import settings
 from app.database import engine
-from app.routers import auth, owners
+from app.routers import auth, owners, units
 
 
 # =============================================================================
@@ -100,9 +100,13 @@ app.add_middleware(
 #
 # Mounts the owner router under /api/v1, producing /api/v1/owners,
 # /api/v1/owners/{owner_id}, etc.
+#
+# Mounts the unit router under /api/v1, producing /api/v1/units,
+# /api/v1/units/{unit_id}, and /api/v1/units/{unit_id}/status.
 # =============================================================================
 app.include_router(auth.router, prefix="/api/v1")
 app.include_router(owners.router, prefix="/api/v1")
+app.include_router(units.router, prefix="/api/v1")
 
 
 # =============================================================================
