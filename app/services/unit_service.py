@@ -87,7 +87,8 @@ class UnitService:
             The newly created Unit instance.
 
         Raises:
-            HTTPException: 400 if a unit with this unit_number already exists.
+            HTTPException: 400 if a unit with this unit_number already exists,
+                or if owner_id does not match any existing owner.
         """
         # Step 1 — unit_number is unique building-wide, so reject a duplicate
         # here with a clear 400 rather than letting the database's unique
@@ -103,16 +104,33 @@ class UnitService:
         # payload. UnitCreate has no status field for the client to send in the
         # first place; a brand-new unit is always available until it is
         # explicitly moved on via the status endpoint.
-        return await self.repo.create(
-            unit_number=payload.unit_number,
-            floor=payload.floor,
-            unit_type=payload.unit_type,
-            owner_id=payload.owner_id,
-            bedrooms=payload.bedrooms,
-            size=payload.size,
-            status=UnitStatus.AVAILABLE,
-            created_by=created_by,
-        )
+        #
+        # Step 3 — owner_id is a foreign key, so an id pointing at no existing
+        # owner makes the insert fail with an IntegrityError (the repository
+        # rolls back and re-raises it). Translate it into a clean 400 here.
+        #
+        # payload.owner_id is read safely inside the except block: payload is a
+        # plain Pydantic object, never tracked by the database session, so the
+        # rollback cannot expire it. That is why this needs NO
+        # capture-before-the-risky-call step — unlike delete_unit(), where
+        # unit.id is a SQLAlchemy-tracked attribute that would trigger a
+        # lazy-load (and MissingGreenlet) if read after the rollback.
+        try:
+            return await self.repo.create(
+                unit_number=payload.unit_number,
+                floor=payload.floor,
+                unit_type=payload.unit_type,
+                owner_id=payload.owner_id,
+                bedrooms=payload.bedrooms,
+                size=payload.size,
+                status=UnitStatus.AVAILABLE,
+                created_by=created_by,
+            )
+        except IntegrityError:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Owner with id {payload.owner_id} does not exist",
+            )
 
     # =========================================================================
     # SECTION 4 — get_unit_by_id
