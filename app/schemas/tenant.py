@@ -1,14 +1,23 @@
 """
-Pydantic V2 schemas for the Owner resource.
+Pydantic V2 schemas for the Tenant resource.
 
 Schema hierarchy:
-  OwnerBase       — shared input fields (name, phone, email, national_id)
-  OwnerCreate     — extends OwnerBase unchanged (POST /owners, individuals only)
-  OwnerUpdate     — all fields optional (PATCH /owners/{id})
-  OwnerResponse   — public read schema returned by every owner endpoint
+  TenantBase      — shared input fields (name, phone, email, national_id)
+  TenantCreate    — extends TenantBase unchanged (POST /tenants)
+  TenantUpdate    — all fields optional (PATCH /tenants/{id})
+  TenantResponse  — public read schema returned by every tenant endpoint
 
-These schemas sit at the HTTP boundary — they are the gate between raw client
-JSON and the service layer. No business logic, no DB access here.
+Deliberately simpler than the Owner schemas: a Tenant is always a real
+individual renter, so there is no "type" field to exclude from
+TenantCreate and no company-placeholder row to special-case.
+
+Note what is absent: no unit_id on any schema here. Which unit a tenant
+currently rents is derived from an active rent-category Charge
+(Charge.tenant_id + Charge.unit_id), not stored on the tenant — see the
+Tenant model docstring for the full reasoning.
+
+These schemas sit at the HTTP boundary — they are the gate between raw
+client JSON and the service layer. No business logic, no DB access here.
 """
 
 # =============================================================================
@@ -19,32 +28,26 @@ from typing import Optional
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
-# OwnerType is reused directly from the model, not redefined here — one
-# definition shared across the database layer and the API layer, so the
-# enum can never drift between what the DB accepts and what the API emits.
-from app.models.owner import OwnerType
-
-# DamalPhoneNumber is shared with Tenant (and any future resource with a
-# phone field), so it lives in app/schemas/common.py rather than here — one
-# definition, imported by every resource that needs it.
+# DamalPhoneNumber comes from the shared types module, NOT from
+# app/schemas/owner.py — Tenant has no dependency on the Owner resource, and
+# routing a shared type through another resource's module would invent one.
 from app.schemas.common import DamalPhoneNumber
 
 
 # =============================================================================
-# SECTION 2 — OwnerBase
+# SECTION 2 — TenantBase
 # =============================================================================
-class OwnerBase(BaseModel):
+class TenantBase(BaseModel):
     """
-    Shared foundation for OwnerCreate and OwnerUpdate.
+    Shared foundation for TenantCreate and TenantUpdate.
 
     Never used directly as a request or response type — it exists purely to
     avoid repeating the same fields across the input schemas.
     """
 
-    # The owner's full legal name (individual) or company name.
-    # min_length=2 rejects trivially short names; max_length matches
-    # String(255) on the Owner model. See strip_and_validate_name below for
-    # why min_length alone is not enough.
+    # The tenant's full legal name. min_length=2 rejects trivially short
+    # names; max_length matches String(255) on the Tenant model. See
+    # strip_and_validate_name below for why min_length alone is not enough.
     name: str = Field(min_length=2, max_length=255)
 
     # Optional contact phone number, validated as a real Kenyan-defaulted
@@ -53,10 +56,11 @@ class OwnerBase(BaseModel):
     phone: Optional[DamalPhoneNumber] = None
 
     # Optional contact email address. max_length matches String(255) on the
-    # model.
+    # Tenant model. Not checked for uniqueness — a family renting together
+    # may legitimately share one address, same as Owner.email.
     email: Optional[EmailStr] = Field(default=None, max_length=255)
 
-    # Government-issued identification number for individual owners.
+    # Government-issued identification number for the tenant.
     # max_length matches String(50) on the model.
     national_id: Optional[str] = Field(default=None, max_length=50)
 
@@ -83,56 +87,49 @@ class OwnerBase(BaseModel):
 
 
 # =============================================================================
-# SECTION 3 — OwnerCreate
+# SECTION 3 — TenantCreate
 # =============================================================================
-class OwnerCreate(OwnerBase):
+class TenantCreate(TenantBase):
     """
-    Schema for creating a new owner — POST /owners.
+    Schema for creating a new tenant — POST /tenants.
 
-    Deliberately has NO "type" field. The service layer ALWAYS hardcodes
-    type=OwnerType.INDIVIDUAL when creating an owner through this schema —
-    the same defensive pattern as is_superuser being excluded from
-    UserCreate.
+    Adds nothing to TenantBase. Unlike OwnerCreate there is no "type" field
+    to defensively omit, because Tenant has no type concept at all — every
+    row is a genuine individual renter.
 
-    The single type="company" row (Damal Heights) is created ONLY via a
-    one-time data migration, never through this schema or this endpoint.
-    This is a structural guarantee, not just a convention — the field
-    literally does not exist here for a client to send, and Pydantic
-    ignores unknown fields by default.
+    created_by is likewise absent by design: the service sets it from the
+    authenticated user making the request, never from client input — the
+    same defensive pattern as OwnerCreate and UserCreate.
     """
 
     pass
 
 
 # =============================================================================
-# SECTION 4 — OwnerUpdate
+# SECTION 4 — TenantUpdate
 # =============================================================================
-class OwnerUpdate(BaseModel):
+class TenantUpdate(BaseModel):
     """
-    Schema for partial owner updates — PATCH /owners/{id}.
+    Schema for partial tenant updates — PATCH /tenants/{id}.
 
     All fields are optional: only the fields the client actually sends get
-    updated (the repository uses exclude_unset=True, same as UserUpdate).
+    updated (the repository uses exclude_unset=True, same as OwnerUpdate).
     Omitting a field means "do not change this field."
-
-    Also deliberately excludes "type" — an owner's type should never change
-    via a normal update. An individual owner becoming "the company" makes
-    no domain sense, and the company row is managed exclusively by the
-    seed migration.
     """
 
-    # Optional here, unlike OwnerBase — if omitted, the name is not changed.
+    # Optional here, unlike TenantBase — if omitted, the name is not changed.
     # min_length=2 still rejects an explicit empty or trivially short string;
-    # the validator below applies the same strip-then-recheck as OwnerBase
+    # the validator below applies the same strip-then-recheck as TenantBase
     # whenever a value is actually provided.
     name: Optional[str] = Field(default=None, min_length=2, max_length=255)
 
     # If omitted, the phone number is not changed. When provided, validated
-    # and stored the same way as OwnerBase — see DamalPhoneNumber in
+    # and stored the same way as TenantBase — see DamalPhoneNumber in
     # app/schemas/common.py.
     phone: Optional[DamalPhoneNumber] = None
 
-    # If omitted, the email address is not changed.
+    # If omitted, the email address is not changed. max_length matches
+    # String(255) on the Tenant model, same as TenantBase.
     email: Optional[EmailStr] = Field(default=None, max_length=255)
 
     # If omitted, the national ID is not changed.
@@ -141,11 +138,11 @@ class OwnerUpdate(BaseModel):
     @field_validator("name")
     @classmethod
     def strip_and_validate_name(cls, v: Optional[str]) -> Optional[str]:
-        """Same strip-then-recheck as OwnerBase, but None-aware.
+        """Same strip-then-recheck as TenantBase, but None-aware.
 
         On a PATCH, name is optional: None means "leave the name unchanged",
         so it passes through untouched. When a real string IS provided, it is
-        stripped and re-checked exactly as in OwnerBase — see that validator
+        stripped and re-checked exactly as in TenantBase — see that validator
         for why min_length alone is insufficient.
         """
         if v is None:
@@ -157,57 +154,48 @@ class OwnerUpdate(BaseModel):
 
 
 # =============================================================================
-# SECTION 5 — OwnerResponse
+# SECTION 5 — TenantResponse
 # =============================================================================
-class OwnerResponse(BaseModel):
+class TenantResponse(BaseModel):
     """
     Public-facing read schema — used as response_model on every endpoint
-    returning an owner.
+    returning a tenant.
 
-    Unlike UserResponse, there is no sensitive field to exclude here (no
-    password-equivalent on Owner) — type IS included in the response, since
-    knowing whether an owner is the company or an individual is normal,
-    non-sensitive information the client should see.
+    There is no sensitive field to exclude here (no password-equivalent on
+    Tenant), and no type field to expose either, unlike OwnerResponse.
 
     from_attributes=True lets Pydantic read directly from the SQLAlchemy
-    Owner object returned by the repository/service, same mechanism as
-    UserResponse.
+    Tenant object returned by the repository/service, same mechanism as
+    OwnerResponse.
 
-    Does not inherit from OwnerBase because it is a completely independent
+    Does not inherit from TenantBase because it is a completely independent
     read schema — it represents what we expose, not what we accept.
 
-    created_by appears HERE ONLY — never on OwnerCreate or OwnerUpdate. The
-    service sets it from the authenticated admin making the request (via
-    get_current_active_superuser), never from client input. This is the same
-    defensive pattern as excluding is_superuser from UserCreate and type from
-    OwnerCreate: the field literally does not exist on the input schemas for a
-    client to send, and Pydantic ignores unknown fields by default.
+    created_by appears HERE ONLY — never on TenantCreate or TenantUpdate. The
+    service sets it from the authenticated user making the request, never
+    from client input.
     """
 
-    # Primary key — always present on a persisted owner.
+    # Primary key — always present on a persisted tenant.
     id: int
 
-    # The owner's full legal name or company name.
+    # The tenant's full legal name.
     name: str
 
     # Optional contact phone number — may be None if never provided.
-    phone: Optional[str] = None
+    # Typed as DamalPhoneNumber rather than str so the value read back out
+    # of the database is held to the same E.164 contract it went in under.
+    phone: Optional[DamalPhoneNumber] = None
 
     # Optional contact email address — may be None if never provided.
     email: Optional[EmailStr] = None
 
-    # Government ID number — None for the company row and for individuals
-    # who never provided one.
+    # Government ID number — None for tenants who never provided one.
     national_id: Optional[str] = None
 
-    # Whether this owner is a real individual or the developer company row.
-    # Reused directly from the model — serialises to its string value
-    # ("individual" / "company") because OwnerType inherits from str.
-    type: OwnerType
-
-    # The admin user who created this owner, as a plain foreign key. Optional
-    # so rows created outside the normal API flow (e.g. the company seed
-    # migration) can still be serialised.
+    # The staff user who created this tenant, as a plain foreign key.
+    # Optional so rows whose creating User was later deleted (the FK is
+    # ON DELETE SET NULL) can still be serialised.
     created_by: Optional[int] = None
 
     # UTC timestamp of when the row was first created.
