@@ -60,11 +60,11 @@ from app.database import Base  # noqa: E402
 #
 # Uncomment each line as you create the corresponding model file:
 from app.models.owner import Owner  # noqa: E402, F401
+from app.models.tenant import Tenant  # noqa: E402, F401
 from app.models.unit import Unit  # noqa: E402, F401
 from app.models.user import User  # noqa: E402, F401
 
 # from app.models.property import Property
-# from app.models.tenant import Tenant
 # from app.models.lease import Lease
 # from app.models.payment import Payment
 # ──────────────────────────────────────────────────────────────────────────────
