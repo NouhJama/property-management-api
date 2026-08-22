@@ -34,9 +34,11 @@ from app.core.security import verify_token
 from app.database import get_db
 from app.models.user import User
 from app.repositories.owner_repository import OwnerRepository
+from app.repositories.tenant_repository import TenantRepository
 from app.repositories.unit_repository import UnitRepository
 from app.repositories.user_repository import UserRepository
 from app.services.owner_service import OwnerService
+from app.services.tenant_service import TenantService
 from app.services.unit_service import UnitService
 from app.services.user_service import UserService
 
@@ -177,6 +179,32 @@ def get_unit_service(
         A UnitService wired to this request's repository and session.
     """
     return UnitService(repository)
+
+
+def get_tenant_repository(
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> TenantRepository:
+    """Build a TenantRepository with a live database session.
+
+    Uses the same Annotated[Type, Depends(...)] syntax as the
+    Unit dependency functions.
+    """
+    return TenantRepository(db)
+
+
+def get_tenant_service(
+    repository: Annotated[TenantRepository, Depends(get_tenant_repository)],
+) -> TenantService:
+    """Build a TenantService with a repository.
+
+    Completes the assembly chain: get_db → repository → service.
+    No new auth guard needed — the (not yet built) tenant router
+    will reuse get_current_user for create/update/read/list and
+    get_current_active_superuser for delete only, per the
+    permission split already decided for Tenant (staff can
+    create/update, but delete stays admin-only).
+    """
+    return TenantService(repository)
 
 
 # =============================================================================
