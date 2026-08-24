@@ -59,6 +59,7 @@ from app.database import Base  # noqa: E402
 # generate empty migrations even though your model files exist.
 #
 # Uncomment each line as you create the corresponding model file:
+from app.models.charge import Charge  # noqa: E402, F401
 from app.models.owner import Owner  # noqa: E402, F401
 from app.models.tenant import Tenant  # noqa: E402, F401
 from app.models.unit import Unit  # noqa: E402, F401
