@@ -33,10 +33,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.security import verify_token
 from app.database import get_db
 from app.models.user import User
+from app.repositories.charge_repository import ChargeRepository
 from app.repositories.owner_repository import OwnerRepository
 from app.repositories.tenant_repository import TenantRepository
 from app.repositories.unit_repository import UnitRepository
 from app.repositories.user_repository import UserRepository
+from app.services.charge_service import ChargeService
 from app.services.owner_service import OwnerService
 from app.services.tenant_service import TenantService
 from app.services.unit_service import UnitService
@@ -205,6 +207,34 @@ def get_tenant_service(
     create/update, but delete stays admin-only).
     """
     return TenantService(repository)
+
+
+def get_charge_repository(
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> ChargeRepository:
+    """Build a ChargeRepository with a live database session."""
+    return ChargeRepository(db)
+
+
+def get_charge_service(
+    repository: Annotated[ChargeRepository, Depends(get_charge_repository)],
+) -> ChargeService:
+    """Build a ChargeService with a repository.
+
+    Completes the assembly chain: get_db → repository → service.
+    Takes ONE repository only — ChargeService deliberately does
+    not pre-check that unit_id/owner_id/tenant_id reference real
+    rows, leaving that to PostgreSQL's foreign key constraints,
+    so no Unit/Owner/Tenant repositories need injecting here.
+
+    No new auth guard needed — the (not yet built) charge router
+    reuses get_current_user for create/read/list and
+    get_current_active_superuser for update and cancel, per the
+    permission split already decided: issuing bills is routine
+    staff work, while changing what someone owes or voiding a
+    bill is admin-only. Charge has no delete endpoint at all.
+    """
+    return ChargeService(repository)
 
 
 # =============================================================================
