@@ -7,6 +7,7 @@ Schema hierarchy:
   ChargeUpdate    — PATCH /charges/{id}, admin only, amount/percentage/period
   ChargeCancel    — PATCH /charges/{id}/cancel, admin only
   ChargeResponse  — public read schema returned by every charge endpoint
+  ChargeTotalResponse — aggregate total for one unit over a period range
 
 These schemas sit at the HTTP boundary — they are the gate between raw client
 JSON and the service layer. No business logic, no DB access here.
@@ -293,3 +294,40 @@ class ChargeResponse(BaseModel):
     # from_attributes=True lets Pydantic read from SQLAlchemy ORM instances
     # (object.attribute access) instead of only from plain dicts.
     model_config = ConfigDict(from_attributes=True)
+
+
+# =============================================================================
+# SECTION 7 — ChargeTotalResponse
+# =============================================================================
+class ChargeTotalResponse(BaseModel):
+    """
+    Response schema for the aggregate total endpoint —
+    GET /charges/unit/{unit_id}/total.
+
+    Echoes the query inputs (unit_id, start, end) back alongside the figure so
+    the response is self-describing rather than a bare number. A client
+    holding this object knows exactly which unit and which window the total
+    covers, without having to correlate it against the request it sent.
+
+    Note the deliberate absence of from_attributes here, unlike
+    ChargeResponse: this schema is constructed directly in the router from the
+    service's Decimal return value, not read off a SQLAlchemy ORM object.
+    There is no "total" row anywhere in the database to read attributes from —
+    the figure is computed by a SUM in the repository.
+    """
+
+    # The unit the total was computed for — echoed back from the path param.
+    unit_id: int
+
+    # First day of the earliest billing period included — echoed back from the
+    # query param. Inclusive.
+    start: date
+
+    # First day of the latest billing period included — echoed back from the
+    # query param. Inclusive.
+    end: date
+
+    # The summed amount, exact to two decimal places. Cancelled charges are
+    # excluded from this figure by the repository's query. Decimal("0.00") —
+    # never null — when nothing matches.
+    total: Decimal
