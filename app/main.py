@@ -13,7 +13,7 @@ from sqlalchemy import text
 
 from app.core.config import settings
 from app.database import engine
-from app.routers import auth, owners, tenants, units
+from app.routers import auth, charges, owners, tenants, units
 
 
 # =============================================================================
@@ -106,11 +106,17 @@ app.add_middleware(
 #
 # Mounts the tenant router under /api/v1, producing /api/v1/tenants and
 # /api/v1/tenants/{tenant_id}.
+#
+# Mounts the charge router under /api/v1, producing /api/v1/charges,
+# /api/v1/charges/{charge_id}, /api/v1/charges/{charge_id}/cancel, and the
+# unit/tenant/owner lookup routes. No DELETE route exists on charges by
+# design — charges are voided via PATCH .../cancel, never destroyed.
 # =============================================================================
 app.include_router(auth.router, prefix="/api/v1")
 app.include_router(owners.router, prefix="/api/v1")
 app.include_router(units.router, prefix="/api/v1")
 app.include_router(tenants.router, prefix="/api/v1")
+app.include_router(charges.router, prefix="/api/v1")
 
 
 # =============================================================================
