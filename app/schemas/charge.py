@@ -20,7 +20,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from typing import Optional
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 # ChargeCategory is reused directly from the model, not redefined here — one
 # definition shared across the database layer and the API layer, so the enum
@@ -60,6 +60,40 @@ class ChargeBase(BaseModel):
 
     # The first day of the billing month this charge covers, e.g. 2026-03-01.
     period: date
+
+    # -------------------------------------------------------------------------
+    # validate_period_is_first_of_month
+    #
+    # period identifies WHICH MONTH a bill covers, not a specific day within
+    # it. The day component carries no meaning here — but it is not harmless,
+    # because every query treats it as significant. A charge dated 2026-08-29
+    # and one dated 2026-08-01 both mean "August 2026", yet to every range
+    # query and every grouping they are two different billing periods:
+    # get_by_unit_and_period_range(start=2026-08-01, end=2026-08-01) would find
+    # the second and silently miss the first, and get_by_tenant_and_period
+    # (which matches period exactly) would miss it too. That fragments a
+    # tenant's month across rows nothing joins back together, and quietly
+    # understates a total. Normalising to day 1 at the boundary keeps every
+    # row for a given month genuinely equal.
+    #
+    # This REJECTS rather than silently normalising to day 1. An API that
+    # quietly changes what a client submitted hides mistakes rather than
+    # surfacing them: a caller who meant 2026-09-01 and typed 2026-08-29 would
+    # get a 201 back and never learn they billed the wrong month. The same
+    # reasoning is behind returning 409 on re-cancelling a charge instead of
+    # succeeding as a no-op — for financial records, telling the caller the
+    # truth about what happened beats being accommodating.
+    # -------------------------------------------------------------------------
+    @field_validator("period")
+    @classmethod
+    def validate_period_is_first_of_month(cls, v: date) -> date:
+        """Reject any period that is not the first day of its month."""
+        if v.day != 1:
+            raise ValueError(
+                "period must be the first day of the billing month "
+                "(e.g. 2026-08-01 for August 2026)"
+            )
+        return v
 
     # Populated ONLY for service_charge — see the validator below.
     owner_id: Optional[int] = None
@@ -203,6 +237,36 @@ class ChargeUpdate(BaseModel):
 
     # If omitted, the billing period is not changed.
     period: Optional[date] = None
+
+    # -------------------------------------------------------------------------
+    # validate_period_is_first_of_month
+    #
+    # The same rule as ChargeBase, and it has to be repeated here because
+    # ChargeUpdate deliberately does NOT inherit from ChargeBase — it is a
+    # standalone partial-update schema with its own optional fields. Without
+    # this, a correction could reintroduce exactly the mid-month period that
+    # creation rejects, through the one endpoint allowed to change period at
+    # all. See ChargeBase.validate_period_is_first_of_month for the full
+    # reasoning: the day component would fragment range queries and groupings,
+    # and the rule rejects rather than silently normalising so a mistyped
+    # month surfaces instead of being quietly accepted.
+    #
+    # The one difference: period is Optional here, so None must pass straight
+    # through untouched. None means "do not change this field", not "an
+    # invalid date" — the validator only runs on a value the client actually
+    # sent, and returning None unchanged leaves exclude_unset=True in the
+    # repository to do its job.
+    # -------------------------------------------------------------------------
+    @field_validator("period")
+    @classmethod
+    def validate_period_is_first_of_month(cls, v: Optional[date]) -> Optional[date]:
+        """Reject any period that is not the first day of its month; allow None."""
+        if v is not None and v.day != 1:
+            raise ValueError(
+                "period must be the first day of the billing month "
+                "(e.g. 2026-08-01 for August 2026)"
+            )
+        return v
 
 
 # =============================================================================
