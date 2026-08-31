@@ -34,15 +34,10 @@ The helpers below exist to make that chain a single readable line per test.
 
 from httpx import AsyncClient
 
+from tests.conftest import create_owner
+
 # Phone is sent in local Kenyan form and comes back normalised to E164 by
 # DamalPhoneNumber — same convention as test_owners.py and test_units.py.
-OWNER_PAYLOAD = {
-    "name": "Amina Hassan",
-    "phone": "0707234780",
-    "email": "amina@example.com",
-    "national_id": "12345678",
-}
-
 TENANT_PAYLOAD = {
     "name": "Yusuf Omar",
     "phone": "0711223344",
@@ -59,18 +54,9 @@ TENANT_PAYLOAD = {
 # some three charges in three different months, one needs a unit with no
 # charges at all — so the choice stays at the call site. A fixture would force
 # the same chain on every test whether or not it wanted it.
-async def create_owner(client: AsyncClient, admin_headers: dict) -> int:
-    """Create a real Owner through the API as admin and return its id.
-
-    Owner creation is admin-only, so this always uses admin_headers even in
-    tests whose subject is a staff member — the staff caller is exercised on
-    the charge endpoint itself, not on this setup step.
-    """
-    response = await client.post("/api/v1/owners", json=OWNER_PAYLOAD, headers=admin_headers)
-    assert response.status_code == 201
-    return response.json()["id"]
-
-
+#
+# create_owner is shared with test_units.py and lives in conftest.py; the rest
+# below are specific to this file.
 async def create_tenant(client: AsyncClient, staff_headers: dict) -> int:
     """Create a real Tenant through the API as staff and return its id.
 
