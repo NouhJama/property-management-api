@@ -8,12 +8,8 @@ analogue: it is the one write path on this router deliberately left open to
 ordinary staff, so it gets its own dedicated test.
 
 Also covers input validation (duplicate unit_number, an owner_id that does not
-exist, the bedrooms/unit_type matrix) and the fetch-then-act 404 paths.
-
-Note: the 409 delete-conflict path is NOT tested here — nothing currently
-references Unit with a RESTRICT foreign key, so there is no way to honestly
-trigger it yet. This will be added once Charge/Payment exist. See the comment
-at the bottom of this file.
+exist, the bedrooms/unit_type matrix), the fetch-then-act 404 paths, and the
+409 delete-conflict path now that Charge references units.id.
 """
 
 from httpx import AsyncClient
@@ -354,14 +350,71 @@ async def test_delete_unit_success(client: AsyncClient, admin_headers: dict):
     assert follow_up.status_code == 404
 
 
-# =============================================================================
-# Not tested here — the 409 delete-conflict path
-# =============================================================================
-# UnitService.delete_unit translates an IntegrityError into a 409 Conflict, the
-# same shape as OwnerService.delete_owner (covered by
-# test_delete_owner_with_units_conflict). It is deliberately NOT tested here:
-# no table currently references Unit through a RESTRICT foreign key, so there
-# is no honest way to make PostgreSQL reject the delete. Faking it — mocking
-# the repository to raise, or hand-writing a temporary FK — would test the mock
-# rather than the behaviour. Add this test once Charge/Payment reference Unit
-# and the conflict becomes genuinely reachable.
+async def test_delete_unit_with_charges_conflict(
+    client: AsyncClient, admin_headers: dict, staff_headers: dict
+):
+    """Deleting a unit that still has a Charge against it returns 409, not 500.
+
+    This path was UNREACHABLE until Charge landed. UnitService.delete_unit has
+    translated IntegrityError into a 409 Conflict for weeks, but no table
+    referenced units.id, so PostgreSQL had no reason to reject any delete and
+    that except block never once executed. Charge.unit_id is declared with no
+    ondelete, so it falls back to RESTRICT — deleting a unit with a charge
+    against it is now genuinely refused by the database, and this is the first
+    test that actually drives the translation.
+
+    It is also the first real verification of the capture-unit_id-before-delete
+    fix. rollback() inside the repository expires the Unit object, so reading
+    unit.id inside the except block would hit SQLAlchemy's synchronous
+    lazy-load path and raise MissingGreenlet. That bug was found and fixed in
+    OwnerService.delete_owner and applied preemptively here; with nothing to
+    trigger the branch, "preemptively" meant "unproven". If the capture were
+    missing, this test would fail with a 500 rather than the expected 409.
+
+    The follow-up GET is not decoration: a 409 alone only proves an error was
+    raised. Asserting the unit still reads back with 200 proves the delete was
+    genuinely rolled back rather than half-applied.
+    """
+    unit = await create_unit(client, admin_headers, "TEST-DEL-CONFLICT")
+
+    # A Charge needs a real tenant as the owing party for the rent category.
+    # Tenant creation is open to staff on that router, so no admin is needed.
+    tenant = await client.post(
+        "/api/v1/tenants",
+        json={
+            "name": "Yusuf Omar",
+            "phone": "0711223344",
+            "email": "yusuf@example.com",
+            "national_id": "87654321",
+        },
+        headers=staff_headers,
+    )
+    assert tenant.status_code == 201
+
+    # amount is sent as a STRING, never a JSON float — Numeric(12, 2) pairs
+    # with Decimal, and a binary float cannot hold "30000.00" exactly.
+    # period must be the first day of a month.
+    charge = await client.post(
+        "/api/v1/charges",
+        json={
+            "unit_id": unit["id"],
+            "category": "rent",
+            "amount": "30000.00",
+            "period": "2026-08-01",
+            "tenant_id": tenant.json()["id"],
+        },
+        headers=staff_headers,
+    )
+    assert charge.status_code == 201
+
+    response = await client.delete(f"/api/v1/units/{unit['id']}", headers=admin_headers)
+
+    assert response.status_code == 409
+    detail = response.json()["detail"]
+    assert detail
+    assert "cannot delete unit" in detail.lower()
+
+    # The critical half of this test. Without it, a delete that had somehow
+    # succeeded while still returning 409 would go unnoticed.
+    follow_up = await client.get(f"/api/v1/units/{unit['id']}", headers=admin_headers)
+    assert follow_up.status_code == 200
