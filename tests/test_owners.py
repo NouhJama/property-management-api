@@ -19,14 +19,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 # Base.metadata in time for create_all to build it.
 from app.models.unit import Unit, UnitStatus, UnitType
 
-# Phone is sent in local Kenyan form and comes back normalised to E164 by
-# DamalPhoneNumber: "0707234780" → "+254707234780".
-VALID_OWNER_PAYLOAD = {
-    "name": "Amina Hassan",
-    "phone": "0707234780",
-    "email": "amina@example.com",
-    "national_id": "12345678",
-}
+# The owner create body is shared with test_units.py and test_charges.py, so
+# it lives in conftest.py alongside create_owner — one place to fix when the
+# schema gains a field. Imported under this file's existing local name so
+# nothing below has to change.
+from tests.conftest import OWNER_PAYLOAD as VALID_OWNER_PAYLOAD
 
 
 # =============================================================================

@@ -13,6 +13,11 @@ Authorization header dict for tests that exercise permission-gated routes.
 The test database URL is resolved from the DATABASE_URL environment variable
 when it is set (CI) and falls back to local development credentials when it
 is not — see SECTION 2 for the full explanation.
+
+SECTION 7 holds shared HELPERS rather than fixtures — plain functions that
+tests call explicitly, kept here so a change to an entity's create payload is
+a one-file change. See that section's own comment for why they are not
+fixtures.
 """
 
 # =============================================================================
@@ -189,3 +194,46 @@ async def admin_headers(client: AsyncClient, db_session: AsyncSession):
     token = login_response.json()["access_token"]
 
     return {"Authorization": f"Bearer {token}"}
+
+
+# =============================================================================
+# SECTION 7 — Shared helpers (NOT fixtures)
+# =============================================================================
+# Everything above this line is a pytest fixture. Everything below it is not.
+#
+# These are shared HELPERS, not fixtures. The distinction is deliberate:
+#   - They are called explicitly, by name, inside the body of a test — pytest
+#     never discovers or injects them.
+#   - They take per-test arguments (which headers to create with, which
+#     unit_number to use), so the caller controls the setup rather than
+#     receiving one fixed version of it.
+#   - Not every test needs them. A fixture named as a test parameter always
+#     runs; a helper only runs where a test actually calls it. Some tests
+#     deliberately need NO owner at all (test_create_unit_invalid_owner), and
+#     a fixture would force the creation on them anyway.
+#
+# They live here rather than in each test file so that a change to any
+# entity's create payload — a new required field, a new validation rule, a
+# renamed key — needs fixing in exactly ONE place, instead of once per test
+# file that happens to build that entity as setup.
+
+# Phone is sent in local Kenyan form and comes back normalised to E164 by
+# DamalPhoneNumber: "0707234780" → "+254707234780".
+OWNER_PAYLOAD = {
+    "name": "Amina Hassan",
+    "phone": "0707234780",
+    "email": "amina@example.com",
+    "national_id": "12345678",
+}
+
+
+async def create_owner(client: AsyncClient, admin_headers: dict) -> int:
+    """Create a real Owner through the API as admin and return its id.
+
+    Owner creation is admin-only, so this always uses admin_headers even in
+    tests whose subject is a staff member — the staff caller is exercised on
+    the endpoint under test, not on this setup step.
+    """
+    response = await client.post("/api/v1/owners", json=OWNER_PAYLOAD, headers=admin_headers)
+    assert response.status_code == 201
+    return response.json()["id"]

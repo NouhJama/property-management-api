@@ -14,35 +14,18 @@ exist, the bedrooms/unit_type matrix), the fetch-then-act 404 paths, and the
 
 from httpx import AsyncClient
 
-# Phone is sent in local Kenyan form and comes back normalised to E164 by
-# DamalPhoneNumber — same as test_owners.py.
-OWNER_PAYLOAD = {
-    "name": "Amina Hassan",
-    "phone": "0707234780",
-    "email": "amina@example.com",
-    "national_id": "12345678",
-}
+from tests.conftest import create_owner
 
 
 # =============================================================================
 # Helpers
 # =============================================================================
-# A plain async helper rather than a fixture: every unit test needs a valid
-# owner_id, but several also need to control WHICH headers create it, and one
-# needs no owner at all (the invalid-owner test). A helper keeps that choice
-# at the call site — a fixture would force the same creation on every test.
-async def create_owner(client: AsyncClient, admin_headers: dict) -> int:
-    """Create a real Owner through the API as admin and return its id.
-
-    Owner creation is admin-only, so this always uses admin_headers even in
-    tests whose subject is a staff member — the staff caller is exercised on
-    the unit endpoint itself, not on this setup step.
-    """
-    response = await client.post("/api/v1/owners", json=OWNER_PAYLOAD, headers=admin_headers)
-    assert response.status_code == 201
-    return response.json()["id"]
-
-
+# create_owner lives in conftest.py — it is shared with test_charges.py. The
+# helpers below are specific to this file and stay here. Both kinds are plain
+# functions rather than fixtures: every unit test needs a valid owner_id, but
+# several also need to control WHICH headers create it, and one needs no owner
+# at all (the invalid-owner test). A helper keeps that choice at the call site
+# — a fixture would force the same creation on every test.
 def valid_unit_payload(owner_id: int, unit_number: str = "TEST-G01") -> dict:
     """Return a minimal valid UnitCreate body for the given owner.
 
