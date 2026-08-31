@@ -19,11 +19,8 @@ and update, the tenant equivalents assert staff SUCCEED. Only
 test_delete_tenant_forbidden_for_staff keeps the 403 shape.
 
 Also covers input validation (name minimum length, phone format), the
-created_by audit trail, and the fetch-then-act 404 paths.
-
-Note: the 409 delete-conflict path is NOT tested here — nothing currently
-references Tenant with a RESTRICT foreign key. See the comment at the
-bottom of this file.
+created_by audit trail, the fetch-then-act 404 paths, and the 409
+delete-conflict path now that Charge references tenants.id.
 """
 
 from httpx import AsyncClient
@@ -282,15 +279,93 @@ async def test_delete_tenant_success_by_admin(
     assert follow_up.status_code == 404
 
 
-# =============================================================================
-# Not tested here — the 409 delete-conflict path
-# =============================================================================
-# TenantService.delete_tenant translates an IntegrityError into a 409 Conflict,
-# the same shape as OwnerService.delete_owner (covered by
-# test_delete_owner_with_units_conflict) and UnitService.delete_unit. It is
-# deliberately NOT tested here: no table currently references Tenant through a
-# RESTRICT foreign key, so there is no honest way to make PostgreSQL reject the
-# delete. Faking it — mocking the repository to raise, or hand-writing a
-# temporary FK — would test the mock rather than the behaviour. Add this test
-# once Charge/Payment reference Tenant and the conflict becomes genuinely
-# reachable.
+async def test_delete_tenant_with_charges_conflict(
+    client: AsyncClient, admin_headers: dict, staff_headers: dict
+):
+    """Deleting a tenant who still owes a Charge returns 409, not 500.
+
+    This path was UNREACHABLE until Charge landed. TenantService.delete_tenant
+    has translated IntegrityError into a 409 Conflict for weeks, but no table
+    referenced tenants.id, so PostgreSQL had no reason to reject any delete and
+    that except block never once executed. Charge.tenant_id is declared with no
+    ondelete, so it falls back to RESTRICT — deleting a tenant with a charge
+    against them is now genuinely refused by the database, and this is the
+    first test that actually drives the translation.
+
+    It is also the first real verification of the capture-tenant_id-before-
+    delete fix. rollback() inside the repository expires the Tenant object, so
+    reading tenant.id inside the except block would hit SQLAlchemy's
+    synchronous lazy-load path and raise MissingGreenlet. That bug was found
+    and fixed in OwnerService.delete_owner and applied preemptively here; with
+    nothing to trigger the branch, "preemptively" meant "unproven". If the
+    capture were missing, this test would fail with a 500 rather than the
+    expected 409.
+
+    The follow-up GET is not decoration: a 409 alone only proves an error was
+    raised. Asserting the tenant still reads back with 200 proves the delete
+    was genuinely rolled back rather than half-applied.
+    """
+    # A Charge cannot exist on its own: it needs a real unit, and a Unit in
+    # turn needs a real owner. Both of those creations are admin-only, unlike
+    # the tenant and the charge themselves.
+    owner = await client.post(
+        "/api/v1/owners",
+        json={
+            "name": "Amina Hassan",
+            "phone": "0707234780",
+            "email": "amina@example.com",
+            "national_id": "12345678",
+        },
+        headers=admin_headers,
+    )
+    assert owner.status_code == 201
+
+    # unit_type "shop" requires bedrooms to be absent entirely, so the body
+    # carries no bedrooms key.
+    unit = await client.post(
+        "/api/v1/units",
+        json={
+            "unit_number": "TEST-TNT-CONFLICT",
+            "floor": 0,
+            "unit_type": "shop",
+            "owner_id": owner.json()["id"],
+        },
+        headers=admin_headers,
+    )
+    assert unit.status_code == 201
+
+    created = await client.post(
+        "/api/v1/tenants",
+        json=valid_tenant_payload("Charged Tenant"),
+        headers=staff_headers,
+    )
+    assert created.status_code == 201
+    tenant_id = created.json()["id"]
+
+    # amount is sent as a STRING, never a JSON float — Numeric(12, 2) pairs
+    # with Decimal, and a binary float cannot hold "30000.00" exactly.
+    # period must be the first day of a month.
+    charge = await client.post(
+        "/api/v1/charges",
+        json={
+            "unit_id": unit.json()["id"],
+            "category": "rent",
+            "amount": "30000.00",
+            "period": "2026-08-01",
+            "tenant_id": tenant_id,
+        },
+        headers=staff_headers,
+    )
+    assert charge.status_code == 201
+
+    response = await client.delete(f"/api/v1/tenants/{tenant_id}", headers=admin_headers)
+
+    assert response.status_code == 409
+    detail = response.json()["detail"]
+    assert detail
+    assert "cannot delete tenant" in detail.lower()
+
+    # The critical half of this test. Without it, a delete that had somehow
+    # succeeded while still returning 409 would go unnoticed.
+    follow_up = await client.get(f"/api/v1/tenants/{tenant_id}", headers=admin_headers)
+    assert follow_up.status_code == 200
