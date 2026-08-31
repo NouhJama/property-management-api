@@ -61,13 +61,13 @@ from app.database import Base  # noqa: E402
 # Uncomment each line as you create the corresponding model file:
 from app.models.charge import Charge  # noqa: E402, F401
 from app.models.owner import Owner  # noqa: E402, F401
+from app.models.payment import Payment  # noqa: E402, F401
 from app.models.tenant import Tenant  # noqa: E402, F401
 from app.models.unit import Unit  # noqa: E402, F401
 from app.models.user import User  # noqa: E402, F401
 
 # from app.models.property import Property
 # from app.models.lease import Lease
-# from app.models.payment import Payment
 # ──────────────────────────────────────────────────────────────────────────────
 
 # target_metadata tells Alembic which tables to compare against the live DB
